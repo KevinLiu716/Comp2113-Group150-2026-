@@ -4,6 +4,16 @@ This is a prviate group project for comp2113 group 150
 Game Background
 The apocalypse descended abruptly, shrouding the familiar world in radioactive dust. The six of you have taken shelter in this makeshift refuge, facing only limited supplies and unknown threats outside the door. Over the next ten days, every choice is a matter of survival.
 
+Select Difficulty & Starting Supplies:
+Easy Difficulty:
+A. Basic Stockpile: Food x18, Water x18, Medicine x1
+B. Medical Priority: Food x8, Water x8, Medicine x2
+
+Hard Difficulty:
+A. All-in: Food x18, Water x18, Medicine x0 (One survivor starts as Weak)
+B. Frugal Start: Food x6, Water x6, Medicine x2
+
+
 难度分级：简单/困难
 结算方法：全员死亡直接结算，否则在第11天进入结局
 ——————————————————————————————————
