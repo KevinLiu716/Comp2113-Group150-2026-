@@ -124,7 +124,7 @@ Passing by a Supermarket: The shelves are mostly empty, but beneath the rubble, 
 
 2.水厂：
 - 基础：第二天获得水×6/4
-- 风险：需要1人留守取水（当天无法返回，困难难度下20%概率死亡，也不会获得水）
+- 风险：所有外出人员20%概率受伤或死亡
 Water Plant: The city's water purification system has long failed, but the plant's deep storage tanks might still hold uncontaminated water.
 
 3.药店
