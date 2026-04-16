@@ -1,4 +1,4 @@
-//举例：如何在主循环中控制外出人数和应用延迟资源
+//举例：如何在主循环中控制外出人数
 
 // 获取最大外出人数
 int maxExp = gameState.survivors.maxExpedition();
@@ -17,9 +17,3 @@ if (chosenExp > maxExp) {
 }
 
 
-//延迟资源的处理
-// 在事件系统中，如"水厂"事件
-gameState.addDelayedResource(0, 6, 0, 1);  // 1天后获得6水
-
-// 在主循环的每日更新中
-gameState.applyDelayedResources();  // 应用所有到期的延迟资源
