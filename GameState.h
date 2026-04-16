@@ -1,100 +1,74 @@
-// gamestate.h
-// 游戏状态和核心数据结构的定义
-
 #ifndef GAMESTATE_H
 #define GAMESTATE_H
 
 #include <vector>
-#include <string>
 
-// ==================== 枚举类型 ====================
-// 游戏难度
-enum class Difficulty {
-    EASY,
-    HARD
+// 难度等级
+enum class Difficulty { EASY, HARD };
+
+// 幸存者状态
+enum class SurvivorStatus { HEALTHY, WEAK, MUTATED, DECEASED };
+
+// 简化幸存者结构
+struct Survivor {
+    SurvivorStatus status;         // 当前状态
+    int daysWeak;                  // 病弱天数（仅当status==WEAK时有效）
+    
+    // 简易构造函数
+    Survivor() : status(SurvivorStatus::HEALTHY), daysWeak(0) {}
+    Survivor(SurvivorStatus s) : status(s), daysWeak(0) {}
 };
 
-// 幸存者状态类型
-enum class SurvivorStatus {
-    HEALTHY,    // 健康
-    WEAK,       // 病弱
-    MUTATED,    // 变异
-    DECEASED    // 死亡
+// 游戏总状态
+class GameState {
+public:
+    // 基础状态
+    Difficulty difficulty;
+    int currentDay;
+    
+    // 幸存者
+    std::vector<Survivor> survivors;
+    
+    // 资源
+    int food;
+    int water;
+    int medicine;
+    
+    // 特殊道具
+    bool hasRadio;      // 是否拥有收音机
+    bool hasNote;       // 是否拥有纸条
+    bool usedNoteEffect;// 纸条效果（强制触发外出事件7）是否已使用
+    
+    // 临时状态（每日重置）
+    std::vector<int> expeditionMemberIds;  // 当日外出人员索引列表
+    bool wasTreatedToday;                  // 今日是否已治疗
+    
+    // 事件与结局标记
+    bool triggeredEvent6;       // 是否触发过每日事件6（异常信号）
+    int campRobberyCount;       // 抢劫其他营地的次数
+    bool forceEvent5NextDay;    // 下一天是否强制触发每日事件5（不速之客）
+    
+    // 结局
+    bool gameEnded;
+    std::string endingMessage;
+    
+    // 构造函数
+    GameState();
+    
+    // 状态查询辅助函数
+    int countSurvivorsByStatus(SurvivorStatus status) const;
+    int countHealthySurvivors() const;
+    int countWeakSurvivors() const;
+    int countMutatedSurvivors() const;
+    int countLivingSurvivors() const;
+    
+    // 状态重置函数
+    void resetDailyStates();
+    
+    // 物资消耗计算
+    int calculateRequiredFood() const;
+    int calculateRequiredWater() const;
+
 };
-
-// 幸存者状态池（每种状态人数）
-struct SurvivorPool {
-    int healthy = 0;
-    int weak = 0;
-    int mutated = 0;
-    int deceased = 0;
-    
-    // 总人数（固定为6，但计算时可从状态累加）
-    int total() const { return healthy + weak + mutated + deceased; }
-    
-    // 存活人数
-    int alive() const { return healthy + weak + mutated; }
-    
-    // 可以外出的人数（健康+变异）÷ 2（向下取整）
-// 主循环里给玩家不超过这个数的选项
-    int maxExpedition() const { return (healthy + mutated) / 2; }
-    
-    // 状态变更方法
-    void changeStatus(SurvivorStatus from, SurvivorStatus to, int count = 1);
-    
-    // 获取特定状态的幸存者索引列表（用于随机选择）
-    std::vector<int> getIndicesByStatus(SurvivorStatus status) const;
-};
-
-/// 游戏核心状态
-struct GameState {
-    // --- 人员状态 ---
-    SurvivorPool survivors;
-    
-    // --- 物资 ---
-    int food = 0;
-    int water = 0;
-    int medicine = 0;
-    
-    // --- 特殊物品 ---
-    bool hasRadio = false;      // 收音机
-    bool hasNote = false;       // 有信息的纸条
-    
-    // --- 游戏进度 ---
-    int currentDay = 1;
-    Difficulty difficulty = Difficulty::EASY;
-    
-    // --- 事件相关标志 ---
-    bool forceEvent5NextDay = false;  // 下一天强制触发"不速之客"
-    bool endingSignalTriggered = false; // 是否触发过异常信号（结局1条件）
-    
-    // --- 统计信息（用于结局判定）---
-    int campRobbedCount = 0;  // 抢劫营地次数
-    
-    // --- 延迟获得的资源（如"水厂"事件第二天获得水）---
-    struct DelayedResource {
-        int food = 0;
-        int water = 0;
-        int medicine = 0;
-        int daysRemaining = 0;  // 剩余天数，每天减1，为0时生效
-    };
-    std::vector<DelayedResource> delayedResources;
-    
-    // 应用延迟资源（每天调用一次）
-    void applyDelayedResources();
-    
-    // 添加延迟资源
-    void addDelayedResource(int foodAmt, int waterAmt, int medicineAmt, int days);
-};
-
-// ==================== 辅助函数声明 ====================
-// 游戏状态初始化
-void initGameState(GameState& state, Difficulty diff, int supplyChoice);
-
-// 资源消耗（返回缺失的食物和水数量）
-bool consumeResources(GameState& state, int& missingFood, int& missingWater);
-
-// 更新状态（每天结束时调用，包括状态转换等）
-void updateDailyState(GameState& state);
 
 #endif // GAMESTATE_H
