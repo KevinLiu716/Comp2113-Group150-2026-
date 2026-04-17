@@ -1,7 +1,8 @@
 #ifndef EVENTSYSTEM_H
 #define EVENTSYSTEM_H
 
-#include "gamestate.h"
+#include "Tools.h"
+#include "GameState.h"
 #include <string>
 #include <vector>
 
