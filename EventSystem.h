@@ -61,20 +61,13 @@ enum class CampOption {
     ROB
 };
 
-// 周边清理选项
+//clearing
 enum class ClearOption {
-    OUTER_CLEAR,        // 外围清理
-    INNER_SEARCH        // 深入内部
+    OUTER_CLEAR,
+    INNER_SEARCH
 };
 
-/**
- * @brief 处理外出事件
- * @param state 游戏状态引用
- * @param eventType 外出事件类型
- * @param memberIndices 外出人员索引列表
- * @param choice 额外选择（用于营地事件和周边清理事件）
- * @return 外出结果描述字符串
- */
+//memberIndices -- how go out today
 std::string processExpeditionEvent(
     GameState& state, 
     ExpeditionEventType eventType,
@@ -82,109 +75,19 @@ std::string processExpeditionEvent(
     int choice = -1
 );
 
-/**
- * @brief 随机选择外出事件
- * @param state 游戏状态引用
- * @return 被选中的外出事件类型
- * @note 考虑特殊道具效果（如hasNote和usedNoteEffect）
- */
 ExpeditionEventType selectRandomExpeditionEvent(GameState& state);
+//return eventType
+//flag hasNote/usedNoteEffect
 
-/**
- * @brief 处理经过超市事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @return 事件描述
- */
 std::string handleSupermarket(GameState& state, const std::vector<int>& memberIndices);
-
-/**
- * @brief 处理水厂事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @return 事件描述
- */
 std::string handleWaterPlant(GameState& state, const std::vector<int>& memberIndices);
-
-/**
- * @brief 处理药店事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @return 事件描述
- */
 std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndices);
-
-/**
- * @brief 处理其他幸存者营地事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @param option 营地交互选项
- * @return 事件描述
- */
-std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option);
-
-/**
- * @brief 处理周边清理事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @param option 清理选项
- * @return 事件描述
- */
-std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option);
-
-/**
- * @brief 处理实验室事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @return 事件描述
- */
 std::string handleLaboratory(GameState& state, const std::vector<int>& memberIndices);
-
-/**
- * @brief 处理隐藏仓库事件
- * @param state 游戏状态引用
- * @param memberIndices 外出人员索引列表
- * @return 事件描述
- */
 std::string handleHiddenStorage(GameState& state, const std::vector<int>& memberIndices);
+//set flag usedNoteEffect
 
-// ============================
-// 工具函数
-// ============================
-
-/**
- * @brief 从健康幸存者中随机选择指定数量的人员
- * @param state 游戏状态引用
- * @param count 需要选择的人数
- * @return 被选中人员的索引列表
- */
-std::vector<int> selectRandomHealthySurvivors(GameState& state, int count);
-
-/**
- * @brief 从所有幸存者中随机选择指定数量的人员
- * @param state 游戏状态引用
- * @param count 需要选择的人数
- * @param includeWeak 是否包含病弱者
- * @param includeMutated 是否包含变异者
- * @return 被选中人员的索引列表
- */
-std::vector<int> selectRandomSurvivors(
-    GameState& state, 
-    int count, 
-    bool includeWeak = false, 
-    bool includeMutated = true
-);
-
-/**
- * @brief 随机决定事件（按概率）
- * @param probability 成功概率（0.0到1.0之间）
- * @return 是否成功
- */
-bool randomDecision(float probability);
-
-/**
- * @brief 初始化事件系统的随机数生成器
- */
-void initializeEventSystem();
+//has opions
+std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option);
+std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option)
 
 #endif // EVENTSYSTEM_H
