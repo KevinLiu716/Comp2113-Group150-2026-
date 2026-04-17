@@ -1,21 +1,9 @@
 #include "eventsystem.h"
 #include "tools.h"
-#include <string>
-#include <random>
-#include <chrono>
-
+//等待工具函数对于随机数生成，状态修改，物品数量调整
+//line 15,38,71,(86,110)to_string
 using namespace std;
 
-// 全局随机数引擎
-namespace {
-    mt19937 randomEngine(chrono::steady_clock::now().time_since_epoch().count());
-}
-
-// 工具函数
-bool randomDecision(double probability) {
-    uniform_real_distribution<double> dist(0.0, 1.0);
-    return dist(randomEngine) < probability;
-}
 
 // 每日事件处理
 DailyEventType selectRandomDailyEvent(GameState& state) {
@@ -24,9 +12,7 @@ DailyEventType selectRandomDailyEvent(GameState& state) {
         return DailyEventType::UNEXPECTED_VISITOR;
     }
     
-    uniform_int_distribution<int> dist(1, 6);
-    int randomNum = dist(randomEngine);
-    
+//等待随机数系统
     switch(randomNum) {
         case 1: return DailyEventType::RADIATION_RAIN;
         case 2: return DailyEventType::INTERNAL_CONFLICT;
@@ -49,8 +35,8 @@ string processDailyEvent(GameState& state, DailyEventType eventType) {
         case DailyEventType::SPOILED_SUPPLIES:
             return handleSpoiledSupplies(state);
         case DailyEventType::UNEXPECTED_VISITOR:
-            // 注意：这里只返回描述，实际选择在main.cpp中处理
-            return "Unexpected Visitor: Heavy knocks suddenly sound at the door.";
+            //返回的描述，等待协调main获取选项再修改
+            return "Unexpected Visitor: Heavy knocks suddenly sound at the door. Is it a fellow survivor in need of help or a marauder with ill intentions?";
         case DailyEventType::ANOMALOUS_SIGNAL:
             return handleAnomalousSignal(state);
         default:
@@ -68,10 +54,9 @@ string handleRadiationRain(GameState& state) {
     }
     
     if (affected > 0) {
-        return "Radiation Rain: The deadly rain accelerates the condition of " + 
-               to_string(affected) + " weak survivor(s).";
+        return "Radiation Rain: The sky outside changes ominously. The deadly rain accelerates the condition of weak survivor(s).";
     }
-    return "Radiation Rain: The sky looks ominous, but no one is currently weak.";
+    return "Radiation Rain: The sky looks ominous, but nothing fatal happens.";
 }
 
 string handleInternalConflict(GameState& state) {
@@ -80,9 +65,9 @@ string handleInternalConflict(GameState& state) {
     }
     
     state.forceEvent5NextDay = true;
-    return "Internal Conflict: Arguments escalate. Tomorrow, you will have an unexpected visitor.";
+    return "Internal Conflict: Under immense survival pressure, long-suppressed arguments finally erupt into suspicions inside the shelter.";
 }
-
+//等工具函数选择特定状态幸存者
 string handleMysteriousDream(GameState& state) {
     auto candidates = selectRandomSurvivors(state, 1, true, true, true);
     if (candidates.empty()) return "Mysterious Dream: Silence in the shelter.";
@@ -92,9 +77,9 @@ string handleMysteriousDream(GameState& state) {
     
     if (randomDecision(0.5)) {
         survivor.status = SurvivorStatus::MUTATED;
-        return "Mysterious Dream: " + to_string(idx) + " hears whispers and... changes.";
+        return "Mysterious Dream: someone hears whispers and... changes.";
     }
-    return "Mysterious Dream: " + to_string(idx) + " has a restless night but wakes up unchanged.";
+    return "Mysterious Dream: Someone has a restless night but wakes up unchanged.";
 }
 
 string handleSpoiledSupplies(GameState& state) {
@@ -132,12 +117,10 @@ string handleUnexpectedVisitor(GameState& state, bool openDoor) {
                " Food and " + to_string(waterLoss) + " Water.";
     }
     else {
-        // 获得收音机（如果还没有）
         if (!state.hasRadio) {
             state.hasRadio = true;
             return "Unexpected Visitor: You find a working radio! This might be useful.";
         } else {
-            // 已经有收音机，无事发生
             return "Unexpected Visitor: A survivor leaves something, but it's just junk.";
         }
     }
@@ -146,9 +129,9 @@ string handleUnexpectedVisitor(GameState& state, bool openDoor) {
 string handleAnomalousSignal(GameState& state) {
     if (state.hasRadio) {
         state.triggeredEvent6 = true;
-        return "Anomalous Signal: The radio picks up a strange, rhythmic pattern...";
+        return "Anomalous Signal: It seems that some rescue groups are getting closer.";
     } else {
         state.forceEvent5NextDay = true;
-        return "Anomalous Signal: You hear strange noises. Tomorrow, someone will come.";
+        return "Anomalous Signal: A rhythmic, distinctly unnatural static noise comes from the distance. What could this signal mean?";
     }
 }
