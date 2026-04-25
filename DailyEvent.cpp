@@ -165,7 +165,7 @@ std::string handleSpoiledSupplies(GameState& state) {
 
 std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
     std::string result = "";
-    if (choice) {
+    if (openTheDoor) {
         result += "You open the door. ";
         
         double roll = static_cast<double>(rand()) / RAND_MAX;
