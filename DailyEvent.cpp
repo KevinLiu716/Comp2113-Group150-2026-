@@ -1,30 +1,33 @@
-#include "eventsystem.h"
-#include "tools.h"
-//等待工具函数对于随机数生成，状态修改，物品数量调整
-//line 15,38,71,(86,110)to_string
-using namespace std;
+#include "EventSystem.h"
+#include "Tools.h"
+#include <string>
+#include <iostream>
+#include <cstdlib>  // rand()
+#include <ctime>    // time()
 
-
-// 每日事件处理
-DailyEventType selectRandomDailyEvent(GameState& state) {
-    if (state.forceEvent5NextDay) {
-        state.forceEvent5NextDay = false;
-        return DailyEventType::UNEXPECTED_VISITOR;
-    }
-    
-//等待随机数系统
-    switch(randomNum) {
-        case 1: return DailyEventType::RADIATION_RAIN;
-        case 2: return DailyEventType::INTERNAL_CONFLICT;
-        case 3: return DailyEventType::MYSTERIOUS_DREAM;
-        case 4: return DailyEventType::SPOILED_SUPPLIES;
-        case 5: return DailyEventType::UNEXPECTED_VISITOR;
-        case 6: return DailyEventType::ANOMALOUS_SIGNAL;
-        default: return DailyEventType::SPOILED_SUPPLIES;
-    }
+int random1to6() {
+    return (rand() % 6) + 1;  // generate integer in [1,6]
 }
 
-string processDailyEvent(GameState& state, DailyEventType eventType) {
+bool getPlayerChoice(const std::string& prompt) {
+    std::cout << prompt << std::endl;
+    std::cout << "1. Open the door" << std::endl;
+    std::cout << "2. Keep the door closed" << std::endl;
+    std::cout << "Please enter your choice (1 or 2): ";
+    
+    int choice;
+    std::cin >> choice;
+    
+    while (choice != 1 && choice != 2) {
+        std::cout << "Invalid choice. Please enter 1 or 2: ";
+        std::cin >> choice;
+    }
+    
+    return (choice == 1);  // openTheDoor = 1
+}
+
+// main function for processing daily event
+std::string processDailyEvent(GameState& state, DailyEventType eventType) {
     switch(eventType) {
         case DailyEventType::RADIATION_RAIN:
             return handleRadiationRain(state);
@@ -35,8 +38,11 @@ string processDailyEvent(GameState& state, DailyEventType eventType) {
         case DailyEventType::SPOILED_SUPPLIES:
             return handleSpoiledSupplies(state);
         case DailyEventType::UNEXPECTED_VISITOR:
-            //返回的描述，等待协调main获取选项再修改
-            return "Unexpected Visitor: Heavy knocks suddenly sound at the door. Is it a fellow survivor in need of help or a marauder with ill intentions?";
+            std::cout << "Unexpected Visitor: Heavy knocks suddenly sound at the door. "
+                      << "Is it a fellow survivor in need of help or a marauder with ill intentions?" 
+                      << std::endl;
+            bool choice = getPlayerChoice("What do you want to do?");
+            return handleUnexpectedVisitor(state, choice);
         case DailyEventType::ANOMALOUS_SIGNAL:
             return handleAnomalousSignal(state);
         default:
@@ -44,94 +50,164 @@ string processDailyEvent(GameState& state, DailyEventType eventType) {
     }
 }
 
-string handleRadiationRain(GameState& state) {
-    int affected = 0;
-    for (auto& survivor : state.survivors) {
-        if (survivor.status == SurvivorStatus::WEAK) {
-            survivor.daysWeak++;
-            affected++;
+// choose random daily event
+DailyEventType selectRandomDailyEvent(GameState& state) {
+    if (state.forceEvent5NextDay) {
+        state.forceEvent5NextDay = false;  // reset flag
+        return DailyEventType::UNEXPECTED_VISITOR;
+    }
+    
+    int randomNum = random1to6();
+    
+    switch(randomNum) {
+        case 1: return DailyEventType::RADIATION_RAIN;
+        case 2: return DailyEventType::INTERNAL_CONFLICT;
+        case 3: return DailyEventType::MYSTERIOUS_DREAM;
+        case 4: return DailyEventType::SPOILED_SUPPLIES;
+        case 5: return DailyEventType::UNEXPECTED_VISITOR;
+        case 6: return DailyEventType::ANOMALOUS_SIGNAL;
+        default: return DailyEventType::MYSTERIOUS_DREAM; 
+    }
+}
+
+
+std::string handleRadiationRain(GameState& state) {
+    std::string result = "Radiation Rain: The sky outside changes ominously. The deadly rain will accelerate the condition of weak survivor(s)."\n";
+    
+    bool hasWeakSurvivors = false;
+    
+    for (int i = 0; i < static_cast<int>(state.survivors.size()); ++i) {
+        if (state.survivors[i].status == SurvivorStatus::WEAK) {
+            hasWeakSurvivors = true;
+            state.survivors[i].daysWeak += 1;
+            
+            if (state.survivors[i].daysWeak >= 2) {
+                state.survivors[i].status = SurvivorStatus::DECEASED;
+                result += "Survivor " + std::to_string(i + 1) + " has died from prolonged weakness.\n";
+            } else {
+                result += "Survivor " + std::to_string(i + 1) + "'s condition worsens (weakness counter: " 
+                         + std::to_string(state.survivors[i].daysWeak) + ").\n";
+            }
         }
     }
     
-    if (affected > 0) {
-        return "Radiation Rain: The sky outside changes ominously. The deadly rain accelerates the condition of weak survivor(s).";
+    if (!hasWeakSurvivors) {
+        result += "Fortunately, no one is currently weak, so no one is affected.\n";
     }
-    return "Radiation Rain: The sky looks ominous, but nothing fatal happens.";
+    
+    return result;
 }
 
-string handleInternalConflict(GameState& state) {
+
+std::string handleInternalConflict(GameState& state) {
+    std::string result = "Internal Conflict: Under immense survival pressure, long-suppressed arguments finally erupt into suspicions inside the shelter.\n";
+    
     if (state.hasRadio) {
-        return "Internal Conflict: Tensions rise, but the radio provides some comfort.";
-    }
-    
-    state.forceEvent5NextDay = true;
-    return "Internal Conflict: Under immense survival pressure, long-suppressed arguments finally erupt into suspicions inside the shelter.";
-}
-//等工具函数选择特定状态幸存者
-string handleMysteriousDream(GameState& state) {
-    auto candidates = selectRandomSurvivors(state, 1, true, true, true);
-    if (candidates.empty()) return "Mysterious Dream: Silence in the shelter.";
-    
-    int idx = candidates[0];
-    auto& survivor = state.survivors[idx];
-    
-    if (randomDecision(0.5)) {
-        survivor.status = SurvivorStatus::MUTATED;
-        return "Mysterious Dream: someone hears whispers and... changes.";
-    }
-    return "Mysterious Dream: Someone has a restless night but wakes up unchanged.";
-}
-
-string handleSpoiledSupplies(GameState& state) {
-    if (randomDecision(0.5)) {
-        int loss = min(2, state.food);
-        state.food -= loss;
-        return "Spoiled Supplies: You lost " + to_string(loss) + " Food to rot.";
-    } else {
-        int loss = min(2, state.water);
-        state.water -= loss;
-        return "Spoiled Supplies: You lost " + to_string(loss) + " Water to contamination.";
-    }
-}
-
-string handleUnexpectedVisitor(GameState& state, bool openDoor) {
-    if (!openDoor) {
-        return "Unexpected Visitor: You decide not to open the door. Silence returns.";
-    }
-    
-    double roll = uniform_real_distribution<double>(0.0, 1.0)(randomEngine);
-    
-    if (roll < 0.3) {
-        // 获得帮助
-        state.food += 1;
-        state.water += 1;
-        return "Unexpected Visitor: A friendly survivor shares supplies. +1 Food, +1 Water.";
-    } 
-    else if (roll < 0.6) {
-        // 被抢劫
-        int foodLoss = min(3, state.food);
-        int waterLoss = min(3, state.water);
-        state.food -= foodLoss;
-        state.water -= waterLoss;
-        return "Unexpected Visitor: Raiders! You lost " + to_string(foodLoss) + 
-               " Food and " + to_string(waterLoss) + " Water.";
-    }
-    else {
-        if (!state.hasRadio) {
-            state.hasRadio = true;
-            return "Unexpected Visitor: You find a working radio! This might be useful.";
-        } else {
-            return "Unexpected Visitor: A survivor leaves something, but it's just junk.";
-        }
-    }
-}
-
-string handleAnomalousSignal(GameState& state) {
-    if (state.hasRadio) {
-        state.triggeredEvent6 = true;
-        return "Anomalous Signal: It seems that some rescue groups are getting closer.";
+        result += "The radio provides calming music, easing tensions. No negative effects.\n";
     } else {
         state.forceEvent5NextDay = true;
-        return "Anomalous Signal: A rhythmic, distinctly unnatural static noise comes from the distance. What could this signal mean?";
+        result += "Tensions are high. This may attract unwanted attention tomorrow.\n";
     }
+    
+    return result;
+}
+
+
+std::string handleMysteriousDream(GameState& state) {
+    std::string result = "Mysterious Dream: In the night, an indistinguishable whisper invades someone's mind directly.\n";
+    
+    std::vector<int> candidates = selectRandomSurvivors(state, 1, true, true, false);
+    
+    if (candidates.empty()) {
+        result += "No healthy or weak survivors to be affected.\n";
+        return result;
+    }
+    
+    int targetIndex = candidates[0];
+    
+    if (checkProbability(0.5)) {
+        state.survivors[targetIndex].status = SurvivorStatus::MUTATED;
+        result += "Survivor " + std::to_string(targetIndex + 1) + " has mutated!\n";
+    } else {
+        result += "Survivor " + std::to_string(targetIndex + 1) + " resisted the whispers. Nothing happened.\n";
+    }
+    
+    return result;
+}
+
+std::string handleSpoiledSupplies(GameState& state) {
+    std::string result = "Spoiled Supplies: An undeniable smell of rot fills the air; you discover that part of your precious reserves has spoiled in the dampness.\n";
+    
+    if (checkProbability(0.5)) {
+        // food
+        int loss = 2;
+        if (state.food >= loss) {
+            state.food -= loss;
+            result += "Lost " + std::to_string(loss) + " food.\n";
+        } else {
+            result += "Lost all remaining " + std::to_string(state.food) + " food.\n";
+            state.food = 0;
+        }
+    } else {
+        // water
+        int loss = 2;
+        if (state.water >= loss) {
+            state.water -= loss;
+            result += "Lost " + std::to_string(loss) + " water.\n";
+        } else {
+            result += "Lost all remaining " + std::to_string(state.water) + " water.\n";
+            state.water = 0;
+        }
+    }
+    
+    return result;
+}
+
+std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
+    std::string result = "";
+    if (choice) {
+        result += "You open the door. ";
+        
+        double roll = static_cast<double>(rand()) / RAND_MAX;
+        
+        if (roll < 0.3) {
+            state.food += 1;
+            state.water += 1;
+            result += "A friendly survivor shares some supplies with you. Gained 1 food and 1 water.\n";
+        } else if (roll < 0.6) {
+            int foodLoss = (state.food >= 3) ? 3 : state.food;
+            int waterLoss = (state.water >= 3) ? 3 : state.water;
+            
+            state.food -= foodLoss;
+            state.water -= waterLoss;
+            
+            result += "Marauders force their way in and steal supplies. Lost " + 
+                     std::to_string(foodLoss) + " food and " + std::to_string(waterLoss) + " water.\n";
+        } else {
+            if (!state.hasRadio) {
+                state.hasRadio = true;
+                result += "The visitor leaves behind a working radio. You now have a radio!\n";
+            } else {
+                result += "The visitor leaves without incident. Nothing happens.\n";
+            }
+        }
+    } else {  
+        result += "You decide not to open the door. The knocking eventually stops. Nothing happens.\n";
+    }
+    
+    return result;
+}
+
+std::string handleAnomalousSignal(GameState& state) {
+    std::string result = "Anomalous Signal: A rhythmic, distinctly unnatural static noise comes from the distance.\n";
+    
+    if (state.hasRadio) {
+        result += "With the radio, you can analyze the signal. This may be important for the ending.\n";
+        state.triggeredEvent6 = true;  
+    } else {
+        state.forceEvent5NextDay = true;
+        result += "The strange noise unsettles everyone. This may attract unwanted attention tomorrow.\n";
+    }
+    
+    return result;
 }
