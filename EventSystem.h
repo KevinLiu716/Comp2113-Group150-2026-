@@ -17,29 +17,20 @@ enum class DailyEventType {
 };
 
 std::string processDailyEvent(GameState& state, DailyEventType eventType);
-//return discription/result 
 
 DailyEventType selectRandomDailyEvent(GameState& state);
-//return eventType
 //!! consider flag: forceEvent5NextDay
 
 std::string handleRadiationRain(GameState& state);
-//return discrption
-
 
 std::string handleInternalConflict(GameState& state);
-//return discrption
 //!! set flag: forceEvent5NextDay
 
 std::string handleMysteriousDream(GameState& state);
-//return discrption
 
 std::string handleSpoiledSupplies(GameState& state);
-//return discrption
 
-std::string handleUnexpectedVisitor(GameState& state, bool choice);  
-//return discrption
-//player's choice true=openTheDoor, false = ...
+std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor);  
 
 std::string handleAnomalousSignal(GameState& state);
 //!! set flag: forceEvent5NextDay
@@ -86,9 +77,8 @@ std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndic
 std::string handleLaboratory(GameState& state, const std::vector<int>& memberIndices);
 std::string handleHiddenStorage(GameState& state, const std::vector<int>& memberIndices);
 //set flag usedNoteEffect
-
 //has opions
 std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option);
-std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option)
+std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option);
 
 #endif // EVENTSYSTEM_H
