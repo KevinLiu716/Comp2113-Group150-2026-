@@ -226,8 +226,8 @@ void updateSickCounters(GameState& state) {
             state.survivors[i].daysWeak = state.survivors[i].daysWeak + 1;
 
             // Check if this survivor has been weak for too long
-            if (state.survivors[i].daysWeak >= 2) {
-                // This survivor has been weak for 2 days, they die
+            if (state.survivors[i].daysWeak > 2) {
+                // This survivor has been weak for over 2 days, they die
                 state.survivors[i].status = SurvivorStatus::DECEASED;
                 state.survivors[i].daysWeak = 0;
             }
