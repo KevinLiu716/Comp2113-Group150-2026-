@@ -1,14 +1,84 @@
+// ui.cpp
+// Implementation of the UI class. Renders all screens and handles input.
+// Uses ANSI escape codes for color and Unicode box-drawing characters
+// for borders. Output is plain text; works in any UTF-8 capable terminal.
+
 #include "ui.h"
 #include <iostream>
 #include <limits>
 #include <cstdlib>
 #include <sstream>
+
+// ============================================================
+// Quit flag
+//
+// When the player types 'q' or 'Q' at any input prompt, this flag is
+// raised and every subsequent input function returns a safe default
+// without blocking. The main loop polls UI::isQuitRequested() after
+// each UI call to break out cleanly and save the game.
+// ============================================================
+static bool g_quitRequested = false;
+
+bool UI::isQuitRequested() { return g_quitRequested; }
+void UI::resetQuitFlag()   { g_quitRequested = false; }
+
+// Helper: returns true if the given string starts with q or Q (the
+// universal "save and quit" command). Used by every input function.
+static bool isQuitInput(const std::string& s) {
+    if (s.empty()) return false;
+    char c = s[0];
+    return c == 'q' || c == 'Q';
+}
+
+// ============================================================
+// Private helpers
+// ============================================================
+
+// Clear the terminal screen.
 void UI::clearScreen() {
     #ifdef _WIN32
         system("cls");
     #else
         std::cout << "\033[2J\033[1;1H";
     #endif
+}
+
+// Decide the display width (in terminal columns) of a Unicode code point.
+// We need this because some characters look like emoji but actually render
+// as one column (e.g. ☢ ✓ ✗ ▶), while others render as two (e.g. 😊 🍞).
+// Wrong width estimates make our framed boxes misalign.
+static int charDisplayWidth(unsigned int cp) {
+    // Single-column blocks (these used to break alignment).
+    if (cp >= 0x2500 && cp <= 0x259F) return 1;  // Box drawing
+    if (cp >= 0x2600 && cp <= 0x26FF) return 1;  // Misc Symbols (☀ ☢ ★)
+    if (cp >= 0x2700 && cp <= 0x27BF) return 1;  // Dingbats (✓ ✗ ▶ ⚡)
+
+    // Wide CJK ranges - always 2 columns.
+    if (cp >= 0x1100 && cp <= 0x115F) return 2;
+    if (cp >= 0x2E80 && cp <= 0x303E) return 2;
+    if (cp >= 0x3041 && cp <= 0x33FF) return 2;
+    if (cp >= 0x3400 && cp <= 0x4DBF) return 2;
+    if (cp >= 0x4E00 && cp <= 0x9FFF) return 2;
+    if (cp >= 0xA000 && cp <= 0xA4CF) return 2;
+    if (cp >= 0xAC00 && cp <= 0xD7A3) return 2;
+    if (cp >= 0xF900 && cp <= 0xFAFF) return 2;
+    if (cp >= 0xFE30 && cp <= 0xFE4F) return 2;
+    if (cp >= 0xFF00 && cp <= 0xFF60) return 2;
+    if (cp >= 0xFFE0 && cp <= 0xFFE6) return 2;
+
+    // Emoji blocks.
+    if (cp >= 0x1F300 && cp <= 0x1F64F) return 2;
+    if (cp >= 0x1F680 && cp <= 0x1F6FF) return 2;
+    if (cp >= 0x1F700 && cp <= 0x1F77F) return 2;
+    if (cp >= 0x1F900 && cp <= 0x1F9FF) return 2;
+    if (cp >= 0x1FA70 && cp <= 0x1FAFF) return 2;
+
+    // Zero-width helpers used in emoji sequences.
+    if (cp == 0xFE0F) return 0;
+    if (cp == 0x200D) return 0;
+    if (cp >= 0x0300 && cp <= 0x036F) return 0;
+
+    return 1;
 }
 
 int UI::visibleLength(const std::string& text) {
@@ -21,16 +91,28 @@ int UI::visibleLength(const std::string& text) {
             if (c == 'm') inEscape = false;
             continue;
         }
-        // UTF-8 多字节字符（中文、emoji）只计为 1 个可见单位
+        unsigned int cp = 0;
+        int extra = 0;
         if ((c & 0x80) == 0) {
-            len += 1;  // ASCII
+            cp = c;
         } else if ((c & 0xE0) == 0xC0) {
-            len += 1; i += 1;  // 2 字节
+            cp = c & 0x1F; extra = 1;
         } else if ((c & 0xF0) == 0xE0) {
-            len += 2; i += 2;  // 3 字节，中文按 2 个宽度
+            cp = c & 0x0F; extra = 2;
         } else if ((c & 0xF8) == 0xF0) {
-            len += 2; i += 3;  // 4 字节，emoji 按 2 个宽度
+            cp = c & 0x07; extra = 3;
+        } else {
+            len += 1;
+            continue;
         }
+        for (int k = 0; k < extra; k++) {
+            if (i + 1 >= text.size()) break;
+            unsigned char nb = text[i + 1];
+            if ((nb & 0xC0) != 0x80) break;
+            cp = (cp << 6) | (nb & 0x3F);
+            i++;
+        }
+        len += charDisplayWidth(cp);
     }
     return len;
 }
@@ -69,7 +151,7 @@ void UI::drawCentered(const std::string& text, int width) {
 
 void UI::drawLeft(const std::string& text, int width) {
     int textLen = visibleLength(text);
-    int rightPad = width - 2 - 2 - textLen;  // 左边留 2 空格
+    int rightPad = width - 2 - 2 - textLen;
     if (rightPad < 0) rightPad = 0;
 
     std::cout << CYAN << "║" << RESET << "  " << text;
@@ -117,37 +199,73 @@ std::string UI::statusName(SurvivorStatus s) {
     return "Unknown";
 }
 
+// Map a survivor trait to a colored short label.
+std::string UI::traitName(SurvivorTrait t) {
+    switch (t) {
+        case SurvivorTrait::DOCTOR:   return CYAN    + std::string("Doctor")   + RESET;
+        case SurvivorTrait::FRAIL:    return RED     + std::string("Frail")    + RESET;
+        case SurvivorTrait::SCOUT:    return GREEN   + std::string("Scout")    + RESET;
+        case SurvivorTrait::ENGINEER: return YELLOW  + std::string("Engineer") + RESET;
+        case SurvivorTrait::SOLDIER:  return MAGENTA + std::string("Soldier")  + RESET;
+        case SurvivorTrait::LUCKY:    return BLUE    + std::string("Lucky")    + RESET;
+        default: return "";
+    }
+}
+
 std::string UI::colorize(const std::string& text, const std::string& color) {
     return color + text + RESET;
 }
 
 int UI::getValidChoice(int minChoice, int maxChoice) {
-    int choice;
+    std::string input;
     while (true) {
-        if (std::cin >> choice && choice >= minChoice && choice <= maxChoice) {
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            return choice;
+        if (!(std::cin >> input)) {
+            // EOF: treat as quit too, so the program does not hang.
+            g_quitRequested = true;
+            return minChoice;
         }
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        // Check for the universal quit command first.
+        if (isQuitInput(input)) {
+            g_quitRequested = true;
+            return minChoice;  // Return any safe value; caller will exit.
+        }
+        // Try to parse as integer.
+        try {
+            int choice = std::stoi(input);
+            if (choice >= minChoice && choice <= maxChoice) {
+                return choice;
+            }
+        } catch (...) {
+            // Not a number — fall through to error message.
+        }
         std::cout << RED << "  Invalid input. Enter a number between "
-                  << minChoice << " and " << maxChoice << ": " << RESET;
+                  << minChoice << " and " << maxChoice
+                  << " (or 'q' to save & quit): " << RESET;
     }
 }
 
 bool UI::getYesNo() {
-    char c;
+    std::string input;
     while (true) {
-        std::cin >> c;
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        if (c == 'Y' || c == 'y') return true;
-        if (c == 'N' || c == 'n') return false;
-        std::cout << RED << "  Please enter Y or N: " << RESET;
+        if (!(std::cin >> input)) {
+            g_quitRequested = true;
+            return false;
+        }
+        if (isQuitInput(input)) {
+            g_quitRequested = true;
+            return false;
+        }
+        if (input.size() == 1) {
+            char c = input[0];
+            if (c == 'Y' || c == 'y') return true;
+            if (c == 'N' || c == 'n') return false;
+        }
+        std::cout << RED << "  Please enter Y or N (or 'q' to save & quit): " << RESET;
     }
 }
 
 // ============================================================
-// 开始菜单
+// Start menu
 // ============================================================
 
 void UI::showStartMenu() {
@@ -175,6 +293,23 @@ void UI::showStartMenu() {
     drawBottomBorder();
     std::cout << "\n";
     waitForEnter();
+}
+
+bool UI::askContinueGame() {
+    clearScreen();
+    std::cout << "\n";
+    drawTopBorder();
+    drawCentered(BOLD + std::string("  💾  SAVE FILE FOUND  💾  ") + RESET);
+    drawMidBorder();
+    drawLeft("");
+    drawLeft("A previous game was saved on this machine.");
+    drawLeft("");
+    drawLeft(GREEN + std::string("  Y") + RESET + " - Continue from where you left off");
+    drawLeft(RED   + std::string("  N") + RESET + " - Start a new game (saved data will be erased)");
+    drawLeft("");
+    drawBottomBorder();
+    std::cout << "\n  " << CYAN << "▶ " << RESET << "Continue saved game? (Y/N): ";
+    return getYesNo();
 }
 
 Difficulty UI::askDifficulty() {
@@ -221,21 +356,19 @@ int UI::askSupplyPlan(Difficulty diff) {
 }
 
 // ============================================================
-// 每日报告
+// Daily report
 // ============================================================
 
 void UI::showDailyReport(const GameState& state) {
     clearScreen();
     std::cout << "\n";
 
-    // 标题：DAY X / 10
     std::ostringstream title;
     title << BOLD << YELLOW << "  ☀  DAY " << state.currentDay << " / 10  ☀  " << RESET;
     drawTopBorder();
     drawCentered(title.str());
     drawMidBorder();
 
-    // 人员状态汇总
     drawLeft(BOLD + std::string("PERSONNEL STATUS") + RESET);
     drawLeft("");
     std::ostringstream summary;
@@ -246,13 +379,19 @@ void UI::showDailyReport(const GameState& state) {
     drawLeft(summary.str());
     drawLeft("");
 
-    // 每个幸存者的详情
+    // Per-survivor detail with name and trait.
     for (size_t i = 0; i < state.survivors.size(); i++) {
         std::ostringstream line;
-        line << statusIcon(state.survivors[i].status) << "  Survivor " << (i + 1)
-             << "  " << statusName(state.survivors[i].status);
+        std::string name = state.survivors[i].name;
+        while ((int)name.size() < 7) name += " ";
+
+        line << statusIcon(state.survivors[i].status) << "  "
+             << name << " " << statusName(state.survivors[i].status);
+        if (state.survivors[i].status != SurvivorStatus::DECEASED) {
+            line << " [" << traitName(state.survivors[i].trait) << "]";
+        }
         if (state.survivors[i].status == SurvivorStatus::WEAK) {
-            line << DIM << "  (sick day " << state.survivors[i].daysWeak << "/2)" << RESET;
+            line << DIM << "  (sick " << state.survivors[i].daysWeak << "/2)" << RESET;
         }
         drawLeft(line.str());
     }
@@ -262,7 +401,6 @@ void UI::showDailyReport(const GameState& state) {
     drawLeft(BOLD + std::string("SUPPLIES") + RESET);
     drawLeft("");
 
-    // 资源进度条（用 18 作为参考最大值）
     std::ostringstream foodLine, waterLine, medLine;
     foodLine  << "🍞 Food     " << progressBar(state.food, 18) << "  " << state.food;
     waterLine << "💧 Water    " << progressBar(state.water, 18) << "  " << state.water;
@@ -272,19 +410,20 @@ void UI::showDailyReport(const GameState& state) {
     drawLeft(medLine.str());
     drawLeft("");
 
-    // 特殊道具
     std::ostringstream items;
     items << "📻 Radio: " << (state.hasRadio ? (GREEN + std::string("✓") + RESET) : (DIM + std::string("✗") + RESET))
           << "    📜 Note: " << ((state.hasNote && !state.usedNoteEffect) ? (GREEN + std::string("✓") + RESET) : (DIM + std::string("✗") + RESET));
     drawLeft(items.str());
     drawLeft("");
+    drawMidBorder();
+    drawLeft(DIM + std::string("Tip: Type 'q' at any prompt to save & quit.") + RESET);
     drawBottomBorder();
     std::cout << "\n";
     waitForEnter();
 }
 
 // ============================================================
-// 行动选择
+// Daytime actions
 // ============================================================
 
 bool UI::askTreat(const GameState& state) {
@@ -294,11 +433,16 @@ bool UI::askTreat(const GameState& state) {
     drawMidBorder();
 
     int weakCount = state.countWeakSurvivors();
+    bool hasDoctor = state.hasLivingSurvivorWithTrait(SurvivorTrait::DOCTOR);
+
     std::ostringstream w, m;
     w << "🤒 Weak survivors:    " << weakCount;
     m << "💊 Medicine in stock: " << state.medicine;
     drawLeft(w.str());
     drawLeft(m.str());
+    if (hasDoctor) {
+        drawLeft(CYAN + std::string("(A doctor is alive — treatment is free!)") + RESET);
+    }
     drawLeft("");
 
     if (weakCount == 0) {
@@ -307,14 +451,14 @@ bool UI::askTreat(const GameState& state) {
         waitForEnter();
         return false;
     }
-    if (state.medicine == 0) {
-        drawLeft(RED + std::string("  ✗ No medicine left. Cannot treat.") + RESET);
+    if (state.medicine == 0 && !hasDoctor) {
+        drawLeft(RED + std::string("  ✗ No medicine left and no doctor. Cannot treat.") + RESET);
         drawBottomBorder();
         waitForEnter();
         return false;
     }
 
-    drawLeft("Use 1 medicine to heal " + std::to_string(weakCount) + " weak survivor(s)?");
+    drawLeft("Heal " + std::to_string(weakCount) + " weak survivor(s)?");
     drawBottomBorder();
     std::cout << "\n  " << CYAN << "▶ " << RESET << "Treat now? (Y/N): ";
     return getYesNo();
@@ -367,8 +511,11 @@ std::vector<int> UI::askExpeditionMembers(const GameState& state, int count) {
         if (s == SurvivorStatus::HEALTHY || s == SurvivorStatus::MUTATED) {
             available.push_back(i);
             std::ostringstream line;
+            std::string name = state.survivors[i].name;
+            while ((int)name.size() < 7) name += " ";
             line << "  " << available.size() << ". " << statusIcon(s)
-                 << "  Survivor " << (i + 1) << "  " << statusName(s);
+                 << "  " << name << " " << statusName(s)
+                 << " [" << traitName(state.survivors[i].trait) << "]";
             drawLeft(line.str());
         }
     }
@@ -392,8 +539,56 @@ std::vector<int> UI::askExpeditionMembers(const GameState& state, int count) {
     return chosen;
 }
 
+// Show the 7 expedition destinations and let the player pick.
+ExpeditionEventType UI::askExpeditionDestination(const GameState& state) {
+    std::cout << "\n";
+    drawTopBorder();
+    drawCentered(BOLD + std::string("  🗺  CHOOSE A DESTINATION  🗺  ") + RESET);
+    drawMidBorder();
+    drawLeft("Where will the expedition go today?");
+    drawLeft("");
+    drawLeft("  1. " + YELLOW + std::string("Supermarket") + RESET
+             + "       (food gain, costs water)");
+    drawLeft("  2. " + BLUE   + std::string("Water Plant") + RESET
+             + "       (water gain, costs food)");
+    drawLeft("  3. " + GREEN  + std::string("Pharmacy") + RESET
+             + "          (medicine gain, costs both)");
+    drawLeft("  4. " + RED    + std::string("Other Camp") + RESET
+             + "        (negotiate or rob)");
+    drawLeft("  5. " + CYAN   + std::string("Perimeter") + RESET
+             + "         (small reward, low risk)");
+    drawLeft("  6. " + MAGENTA+ std::string("Laboratory") + RESET
+             + "        (DANGER: members may mutate)");
+
+    bool noteAvailable = state.hasNote && !state.usedNoteEffect;
+    int maxChoice = 6;
+    if (noteAvailable) {
+        drawLeft("  7. " + GREEN  + std::string("Hidden Storage") + RESET
+                 + "    (note required, big reward)");
+        maxChoice = 7;
+    } else {
+        drawLeft(DIM + std::string("  7. Hidden Storage   (locked: requires a note)") + RESET);
+    }
+
+    drawBottomBorder();
+    std::cout << "\n  " << CYAN << "▶ " << RESET
+              << "Your choice (1-" << maxChoice << "): ";
+    int choice = getValidChoice(1, maxChoice);
+
+    switch (choice) {
+        case 1: return ExpeditionEventType::SUPERMARKET;
+        case 2: return ExpeditionEventType::WATER_PLANT;
+        case 3: return ExpeditionEventType::PHARMACY;
+        case 4: return ExpeditionEventType::OTHER_CAMP;
+        case 5: return ExpeditionEventType::PERIMETER_CLEAR;
+        case 6: return ExpeditionEventType::LABORATORY;
+        case 7: return ExpeditionEventType::HIDDEN_STORAGE;
+        default: return ExpeditionEventType::SUPERMARKET;
+    }
+}
+
 // ============================================================
-// 事件中的玩家选择
+// In-event player choices
 // ============================================================
 
 bool UI::askDoorChoice() {
@@ -411,7 +606,7 @@ bool UI::askDoorChoice() {
 int UI::askCampChoice() {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🏕️  OTHER SURVIVORS' CAMP  🏕️  ") + RESET);
+    drawCentered(BOLD + std::string("  🏕  OTHER SURVIVORS' CAMP  🏕  ") + RESET);
     drawMidBorder();
     drawLeft("  1. Request help (negotiate)");
     drawLeft("  2. Rob (take by force)");
@@ -423,7 +618,7 @@ int UI::askCampChoice() {
 int UI::askClearChoice() {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🏚️  PERIMETER CLEARING  🏚️  ") + RESET);
+    drawCentered(BOLD + std::string("  🏚  PERIMETER CLEARING  🏚  ") + RESET);
     drawMidBorder();
     drawLeft("  1. Clear outer area  (safer, smaller reward)");
     drawLeft("  2. Search deeper     (riskier, may find a note)");
@@ -433,7 +628,7 @@ int UI::askClearChoice() {
 }
 
 // ============================================================
-// 结果展示
+// Result and message display
 // ============================================================
 
 void UI::showEventResult(const std::string& title, const std::string& text) {
@@ -443,7 +638,6 @@ void UI::showEventResult(const std::string& title, const std::string& text) {
     drawMidBorder();
     drawLeft("");
 
-    // 把多行文本拆开，逐行画进框里
     std::istringstream iss(text);
     std::string line;
     while (std::getline(iss, line)) {
@@ -471,31 +665,113 @@ void UI::showDayEnd(const GameState& state) {
        << "  |  Medicine: " << state.medicine;
     drawLeft(s1.str());
     drawLeft(s2.str());
+    drawLeft("");
+    drawLeft(DIM + std::string("Game saved automatically.") + RESET);
     drawBottomBorder();
     waitForEnter();
 }
 
 // ============================================================
-// 结局
+// Endings
 // ============================================================
+
+// Theme info for one ending: banner color, subtitle, and 6 ASCII rows.
+struct EndingTheme {
+    std::string color;
+    std::string subtitle;
+    std::string banner[6];
+};
+
+// Returns the visual theme matching the given ending type.
+static EndingTheme getEndingTheme(EndingType type) {
+    EndingTheme t;
+    switch (type) {
+        case EndingType::TRAGIC_END:
+            t.color = "\033[31m";
+            t.subtitle = "  💀  TRAGIC END  💀  ";
+            t.banner[0] = "    ██████╗  █████╗ ███╗   ███╗███████╗     ██████╗ ██╗   ██╗███████╗██████╗ ";
+            t.banner[1] = "   ██╔════╝ ██╔══██╗████╗ ████║██╔════╝    ██╔═══██╗██║   ██║██╔════╝██╔══██╗";
+            t.banner[2] = "   ██║  ███╗███████║██╔████╔██║█████╗      ██║   ██║██║   ██║█████╗  ██████╔╝";
+            t.banner[3] = "   ██║   ██║██╔══██║██║╚██╔╝██║██╔══╝      ██║   ██║╚██╗ ██╔╝██╔══╝  ██╔══██╗";
+            t.banner[4] = "   ╚██████╔╝██║  ██║██║ ╚═╝ ██║███████╗    ╚██████╔╝ ╚████╔╝ ███████╗██║  ██║";
+            t.banner[5] = "    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝     ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝";
+            break;
+
+        case EndingType::ORDER_RESTORED:
+            t.color = "\033[32m";
+            t.subtitle = "  🌅  ORDER RESTORED  🌅  ";
+            t.banner[0] = "   ██╗   ██╗██╗ ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗";
+            t.banner[1] = "   ██║   ██║██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝";
+            t.banner[2] = "   ██║   ██║██║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ ";
+            t.banner[3] = "   ╚██╗ ██╔╝██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  ";
+            t.banner[4] = "    ╚████╔╝ ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   ";
+            t.banner[5] = "     ╚═══╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ";
+            break;
+
+        case EndingType::LONE_SURVIVOR:
+            t.color = "\033[33m";
+            t.subtitle = "  🌙  LONE SURVIVOR  🌙  ";
+            t.banner[0] = "      █████╗ ██╗      ██████╗ ███╗   ██╗███████╗";
+            t.banner[1] = "     ██╔══██╗██║     ██╔═══██╗████╗  ██║██╔════╝";
+            t.banner[2] = "     ███████║██║     ██║   ██║██╔██╗ ██║█████╗  ";
+            t.banner[3] = "     ██╔══██║██║     ██║   ██║██║╚██╗██║██╔══╝  ";
+            t.banner[4] = "     ██║  ██║███████╗╚██████╔╝██║ ╚████║███████╗";
+            t.banner[5] = "     ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝";
+            break;
+
+        case EndingType::SYMBIOTIC_EVOLUTION:
+            t.color = "\033[35m";
+            t.subtitle = "  👹  SYMBIOTIC EVOLUTION  👹  ";
+            t.banner[0] = "   ███╗   ███╗██╗   ██╗████████╗ █████╗ ████████╗███████╗";
+            t.banner[1] = "   ████╗ ████║██║   ██║╚══██╔══╝██╔══██╗╚══██╔══╝██╔════╝";
+            t.banner[2] = "   ██╔████╔██║██║   ██║   ██║   ███████║   ██║   █████╗  ";
+            t.banner[3] = "   ██║╚██╔╝██║██║   ██║   ██║   ██╔══██║   ██║   ██╔══╝  ";
+            t.banner[4] = "   ██║ ╚═╝ ██║╚██████╔╝   ██║   ██║  ██║   ██║   ███████╗";
+            t.banner[5] = "   ╚═╝     ╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚══════╝";
+            break;
+
+        case EndingType::MARAUDERS:
+            t.color = "\033[1m\033[31m";
+            t.subtitle = "  ⚔  MARAUDERS  ⚔  ";
+            t.banner[0] = "   ██████╗  █████╗ ███╗   ██╗██████╗ ██╗████████╗███████╗";
+            t.banner[1] = "   ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║╚══██╔══╝██╔════╝";
+            t.banner[2] = "   ██████╔╝███████║██╔██╗ ██║██║  ██║██║   ██║   ███████╗";
+            t.banner[3] = "   ██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║   ╚════██║";
+            t.banner[4] = "   ██████╔╝██║  ██║██║ ╚████║██████╔╝██║   ██║   ███████║";
+            t.banner[5] = "   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚═╝   ╚═╝   ╚══════╝";
+            break;
+
+        case EndingType::STRUGGLE_FOR_SURVIVAL:
+        default:
+            t.color = "\033[36m";
+            t.subtitle = "  ☀  STRUGGLE FOR SURVIVAL  ☀  ";
+            t.banner[0] = "   ███████╗██╗   ██╗██████╗ ██╗   ██╗██╗██╗   ██╗███████╗██████╗ ";
+            t.banner[1] = "   ██╔════╝██║   ██║██╔══██╗██║   ██║██║██║   ██║██╔════╝██╔══██╗";
+            t.banner[2] = "   ███████╗██║   ██║██████╔╝██║   ██║██║██║   ██║█████╗  ██║  ██║";
+            t.banner[3] = "   ╚════██║██║   ██║██╔══██╗╚██╗ ██╔╝██║╚██╗ ██╔╝██╔══╝  ██║  ██║";
+            t.banner[4] = "   ███████║╚██████╔╝██║  ██║ ╚████╔╝ ██║ ╚████╔╝ ███████╗██████╔╝";
+            t.banner[5] = "   ╚══════╝ ╚═════╝ ╚═╝  ╚═╝  ╚═══╝  ╚═╝  ╚═══╝  ╚══════╝╚═════╝ ";
+            break;
+    }
+    return t;
+}
 
 void UI::showEnding(const GameState& state) {
     clearScreen();
     std::cout << "\n";
-    std::cout << RED << BOLD;
-    std::cout << "    ██████╗  █████╗ ███╗   ███╗███████╗     ██████╗ ██╗   ██╗███████╗██████╗ \n";
-    std::cout << "   ██╔════╝ ██╔══██╗████╗ ████║██╔════╝    ██╔═══██╗██║   ██║██╔════╝██╔══██╗\n";
-    std::cout << "   ██║  ███╗███████║██╔████╔██║█████╗      ██║   ██║██║   ██║█████╗  ██████╔╝\n";
-    std::cout << "   ██║   ██║██╔══██║██║╚██╔╝██║██╔══╝      ██║   ██║╚██╗ ██╔╝██╔══╝  ██╔══██╗\n";
-    std::cout << "   ╚██████╔╝██║  ██║██║ ╚═╝ ██║███████╗    ╚██████╔╝ ╚████╔╝ ███████╗██║  ██║\n";
-    std::cout << "    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝     ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝\n";
+
+    EndingTheme theme = getEndingTheme(state.endingType);
+
+    std::cout << theme.color << BOLD;
+    for (int i = 0; i < 6; i++) {
+        std::cout << theme.banner[i] << "\n";
+    }
     std::cout << RESET << "\n";
 
     drawTopBorder();
-    drawCentered(BOLD + std::string("  THE STORY ENDS  ") + RESET);
+    drawCentered(theme.color + BOLD + theme.subtitle + RESET);
     drawMidBorder();
     drawLeft("");
-    // 把结局文字按行画
     std::istringstream iss(state.endingMessage);
     std::string line;
     while (std::getline(iss, line)) {
@@ -520,7 +796,37 @@ void UI::showMessage(const std::string& msg) {
     std::cout << "  " << CYAN << "▶ " << RESET << msg << "\n";
 }
 
+// Final screen shown after the player types 'q' to save and quit.
+void UI::showQuitConfirmation(int currentDay) {
+    clearScreen();
+    std::cout << "\n";
+    drawTopBorder();
+    drawCentered(BOLD + CYAN + std::string("  💾  GAME SAVED  💾  ") + RESET);
+    drawMidBorder();
+    drawLeft("");
+    drawLeft("Your progress has been saved.");
+    drawLeft("");
+    std::ostringstream day;
+    day << "When you return, you will resume on day " << currentDay << ".";
+    drawLeft(day.str());
+    drawLeft("");
+    drawLeft(DIM + std::string("Run the game again with:  make run") + RESET);
+    drawLeft("");
+    drawBottomBorder();
+    std::cout << "\n";
+}
+
 void UI::waitForEnter() {
-    std::cout << "\n  " << DIM << "[ Press Enter to continue... ]" << RESET;
-    std::cin.get();
+    std::cout << "\n  " << DIM << "[ Press Enter to continue, or 'q' to save & quit ]" << RESET;
+    int c = std::cin.get();
+    if (c == EOF) {
+        g_quitRequested = true;
+        return;
+    }
+    if (c == 'q' || c == 'Q') {
+        g_quitRequested = true;
+        // Eat the rest of the line so it doesn't bleed into the next prompt.
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+    // If c was '\n', we're done already.
 }
