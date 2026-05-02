@@ -1,0 +1,262 @@
+// DailyEvent.cpp
+// Implementation of daily (night) random events.
+// Each event has 2-3 narrative variants chosen at random for replayability.
+
+#include "EventSystem.h"
+#include "Tools.h"
+#include <string>
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+
+// Note: random1to6() is defined only here. The duplicate in Expedition.cpp
+// has been removed.
+int random1to6() {
+    return (rand() % 6) + 1;
+}
+
+bool getPlayerChoice(const std::string& prompt) {
+    std::cout << prompt << std::endl;
+    std::cout << "1. Open the door" << std::endl;
+    std::cout << "2. Keep the door closed" << std::endl;
+    std::cout << "Please enter your choice (1 or 2): ";
+
+    int choice;
+    while (true) {
+        if (std::cin >> choice && (choice == 1 || choice == 2)) {
+            return (choice == 1);
+        }
+        if (std::cin.eof()) {
+            return false;  // Default safe choice on EOF
+        }
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+        std::cout << "Invalid choice. Please enter 1 or 2: ";
+    }
+}
+
+// Helper: pick one of the variants[] strings at random.
+static std::string pickVariant(const std::string variants[], int n) {
+    return variants[rand() % n];
+}
+
+// Main dispatcher for night events.
+std::string processDailyEvent(GameState& state, DailyEventType eventType) {
+    switch(eventType) {
+        case DailyEventType::RADIATION_RAIN:
+            return handleRadiationRain(state);
+        case DailyEventType::INTERNAL_CONFLICT:
+            return handleInternalConflict(state);
+        case DailyEventType::MYSTERIOUS_DREAM:
+            return handleMysteriousDream(state);
+        case DailyEventType::SPOILED_SUPPLIES:
+            return handleSpoiledSupplies(state);
+        case DailyEventType::UNEXPECTED_VISITOR: {
+            std::cout << "Unexpected Visitor: Heavy knocks suddenly sound at the door. "
+                      << "Is it a fellow survivor in need of help or a marauder with ill intentions?"
+                      << std::endl;
+            bool choice = getPlayerChoice("What do you want to do?");
+            return handleUnexpectedVisitor(state, choice);
+        }
+        case DailyEventType::ANOMALOUS_SIGNAL:
+            return handleAnomalousSignal(state);
+        default:
+            return "Nothing special happens tonight.";
+    }
+}
+
+// Choose a random daily event for tonight.
+DailyEventType selectRandomDailyEvent(GameState& state) {
+    if (state.forceEvent5NextDay) {
+        state.forceEvent5NextDay = false;
+        return DailyEventType::UNEXPECTED_VISITOR;
+    }
+
+    int randomNum = random1to6();
+
+    switch(randomNum) {
+        case 1: return DailyEventType::RADIATION_RAIN;
+        case 2: return DailyEventType::INTERNAL_CONFLICT;
+        case 3: return DailyEventType::MYSTERIOUS_DREAM;
+        case 4: return DailyEventType::SPOILED_SUPPLIES;
+        case 5: return DailyEventType::UNEXPECTED_VISITOR;
+        case 6: return DailyEventType::ANOMALOUS_SIGNAL;
+        default: return DailyEventType::MYSTERIOUS_DREAM;
+    }
+}
+
+std::string handleRadiationRain(GameState& state) {
+    static const std::string variants[3] = {
+        "Radiation Rain: The sky turns sickly green.\nDeadly droplets hammer the shelter walls.\n",
+        "Radiation Rain: The geiger counter screams to life.\nA toxic downpour seeps through every crack.\n",
+        "Radiation Rain: Ash-black clouds gather low.\nRadioactive rain pools at the door, glowing faintly.\n"
+    };
+    std::string result = pickVariant(variants, 3);
+
+    bool hasWeakSurvivors = false;
+
+    for (int i = 0; i < static_cast<int>(state.survivors.size()); ++i) {
+        if (state.survivors[i].status == SurvivorStatus::WEAK) {
+            hasWeakSurvivors = true;
+            state.survivors[i].daysWeak += 1;
+
+            if (state.survivors[i].daysWeak >= 2) {
+                state.survivors[i].status = SurvivorStatus::DECEASED;
+                result += state.survivors[i].name + " has died from prolonged weakness.\n";
+            } else {
+                result += state.survivors[i].name + "'s condition worsens (weakness counter: "
+                         + std::to_string(state.survivors[i].daysWeak) + ").\n";
+            }
+        }
+    }
+
+    if (!hasWeakSurvivors) {
+        result += "Fortunately, no one is currently weak, so the shelter holds.\n";
+    }
+
+    return result;
+}
+
+std::string handleInternalConflict(GameState& state) {
+    static const std::string variants[3] = {
+        "Internal Conflict: Tempers flare over the last ration of water.\n",
+        "Internal Conflict: Whispered accusations turn into shouting matches.\n",
+        "Internal Conflict: A long-buried argument finally erupts in the shelter.\n"
+    };
+    std::string result = pickVariant(variants, 3);
+
+    if (state.hasRadio) {
+        result += "The radio plays an old tune. Tempers cool. No negative effects.\n";
+    } else {
+        state.forceEvent5NextDay = true;
+        result += "Tensions remain high. The noise may attract unwanted attention tomorrow.\n";
+    }
+
+    return result;
+}
+
+std::string handleMysteriousDream(GameState& state) {
+    static const std::string variants[3] = {
+        "Mysterious Dream: A whisper crawls through one survivor's sleep.\n",
+        "Mysterious Dream: Strange voices fill someone's mind with cold light.\n",
+        "Mysterious Dream: A vision of a tower made of teeth invades the night.\n"
+    };
+    std::string result = pickVariant(variants, 3);
+
+    std::vector<int> candidates = selectRandomSurvivors(state, 1, true, true, false);
+
+    if (candidates.empty()) {
+        result += "No healthy or weak survivors are present to be affected.\n";
+        return result;
+    }
+
+    int targetIndex = candidates[0];
+    const std::string& victim = state.survivors[targetIndex].name;
+
+    if (checkProbability(0.5)) {
+        state.survivors[targetIndex].status = SurvivorStatus::MUTATED;
+        result += victim + " has mutated!\n";
+    } else {
+        result += victim + " resists the whispers. Nothing happens.\n";
+    }
+
+    return result;
+}
+
+std::string handleSpoiledSupplies(GameState& state) {
+    static const std::string variants[3] = {
+        "Spoiled Supplies: A foul stench rises from the storage corner.\n",
+        "Spoiled Supplies: Mold has crept into the rations overnight.\n",
+        "Spoiled Supplies: Damp has ruined part of the precious reserves.\n"
+    };
+    std::string result = pickVariant(variants, 3);
+
+    if (checkProbability(0.5)) {
+        int loss = 2;
+        if (state.food >= loss) {
+            state.food -= loss;
+            result += "Lost " + std::to_string(loss) + " food.\n";
+        } else {
+            result += "Lost all remaining " + std::to_string(state.food) + " food.\n";
+            state.food = 0;
+        }
+    } else {
+        int loss = 2;
+        if (state.water >= loss) {
+            state.water -= loss;
+            result += "Lost " + std::to_string(loss) + " water.\n";
+        } else {
+            result += "Lost all remaining " + std::to_string(state.water) + " water.\n";
+            state.water = 0;
+        }
+    }
+
+    return result;
+}
+
+std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
+    std::string result = "";
+    if (openTheDoor) {
+        static const std::string openings[3] = {
+            "You open the door, hand on a makeshift weapon.\n",
+            "You unbolt the door slowly, heart pounding.\n",
+            "You crack the door open, just enough to see.\n"
+        };
+        result += pickVariant(openings, 3);
+
+        double roll = static_cast<double>(rand()) / RAND_MAX;
+
+        if (roll < 0.3) {
+            state.food += 1;
+            state.water += 1;
+            result += "A weary stranger shares some supplies before moving on.\n";
+            result += "Gained 1 food and 1 water.\n";
+        } else if (roll < 0.6) {
+            int foodLoss = (state.food >= 3) ? 3 : state.food;
+            int waterLoss = (state.water >= 3) ? 3 : state.water;
+
+            state.food -= foodLoss;
+            state.water -= waterLoss;
+
+            result += "Marauders shove their way in and take what they want.\n";
+            result += "Lost " + std::to_string(foodLoss) + " food and "
+                   + std::to_string(waterLoss) + " water.\n";
+        } else {
+            if (!state.hasRadio) {
+                state.hasRadio = true;
+                result += "The visitor leaves behind a battered but working radio.\n";
+                result += "You now have a radio!\n";
+            } else {
+                result += "The visitor mutters thanks, then disappears into the night.\n";
+            }
+        }
+    } else {
+        static const std::string ignored[3] = {
+            "You hold your breath. The knocking eventually stops.\nNothing happens.\n",
+            "You stay silent and still. The footsteps fade.\nNothing happens.\n",
+            "You ignore the visitor. After a long minute, they leave.\nNothing happens.\n"
+        };
+        result += pickVariant(ignored, 3);
+    }
+
+    return result;
+}
+
+std::string handleAnomalousSignal(GameState& state) {
+    static const std::string variants[3] = {
+        "Anomalous Signal: A rhythmic static rises from the dead air.\n",
+        "Anomalous Signal: A pulse - three short, three long - repeats outside.\n",
+        "Anomalous Signal: A piercing tone cuts the silence at exactly midnight.\n"
+    };
+    std::string result = pickVariant(variants, 3);
+
+    if (state.hasRadio) {
+        result += "Through the radio you decode the pattern. This may matter for the ending.\n";
+        state.triggeredEvent6 = true;
+    } else {
+        state.forceEvent5NextDay = true;
+        result += "The strange noise unsettles everyone. It may attract attention tomorrow.\n";
+    }
+
+    return result;
+}
