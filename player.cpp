@@ -1,18 +1,12 @@
-// player.cpp
-// This file contains the implementation of all the member functions
-// that are declared inside the GameState class in GameState.h.
+// Now also assigns survivor names and traits at construction.
 
 #include "GameState.h"
+#include <cstdlib>
 
 // Function: GameState (constructor)
-// What it does: This is the constructor for the GameState class.
-//               It sets all the initial values for the game state.
-//               It creates a vector of 6 survivors, all starting as HEALTHY.
-//               All resource counts start at 0.
-//               All boolean flags start as false.
-//               The current day starts at 1.
-// Input: This function takes no input parameters.
-// Output: This function does not return a value. It initializes the object.
+// Purpose:  Initialize all fields to safe defaults. Creates 6 survivors,
+//           gives each a fixed name (Alice, Bob, ...), and randomly
+//           assigns a unique trait to each by shuffling the trait pool.
 GameState::GameState() {
     difficulty = Difficulty::EASY;
     currentDay = 1;
@@ -33,140 +27,116 @@ GameState::GameState() {
 
     gameEnded = false;
     endingMessage = "";
+    endingType = EndingType::NONE;
 
-    // Create 6 survivors, all starting as HEALTHY with daysWeak = 0
-    // The default Survivor constructor already sets HEALTHY and daysWeak = 0
+    // Fixed names so the player can refer to "Alice" etc. consistently.
+    const char* names[6] = {"Alice", "Bob", "Carol", "David", "Eve", "Frank"};
+
+    SurvivorTrait traits[6] = {
+        SurvivorTrait::DOCTOR,
+        SurvivorTrait::FRAIL,
+        SurvivorTrait::SCOUT,
+        SurvivorTrait::ENGINEER,
+        SurvivorTrait::SOLDIER,
+        SurvivorTrait::LUCKY
+    };
+
+    // Fisher-Yates shuffle so each game gives a different trait assignment.
+    for (int i = 5; i > 0; i--) {
+        int j = rand() % (i + 1);
+        SurvivorTrait tmp = traits[i];
+        traits[i] = traits[j];
+        traits[j] = tmp;
+    }
+
     for (int i = 0; i < 6; i++) {
         Survivor newSurvivor;
+        newSurvivor.name = names[i];
+        newSurvivor.trait = traits[i];
         survivors.push_back(newSurvivor);
     }
 }
 
-// Function: countSurvivorsByStatus
-// What it does: This function counts how many survivors have a specific status.
-//               It goes through every survivor in the list one by one,
-//               and checks if their status matches the given status.
-// Input: status - the SurvivorStatus to look for (HEALTHY, WEAK, MUTATED, or DECEASED).
-// Output: Returns an integer, which is the number of survivors with that status.
+// Count how many survivors currently have the given status.
 int GameState::countSurvivorsByStatus(SurvivorStatus status) const {
     int count = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == status) {
-            count = count + 1;
-        }
+        if (survivors[i].status == status) count++;
     }
     return count;
 }
 
-// Function: countHealthySurvivors
-// What it does: This function counts how many survivors are in the HEALTHY status.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the number of healthy survivors.
 int GameState::countHealthySurvivors() const {
     int count = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::HEALTHY) {
-            count = count + 1;
-        }
+        if (survivors[i].status == SurvivorStatus::HEALTHY) count++;
     }
     return count;
 }
 
-// Function: countWeakSurvivors
-// What it does: This function counts how many survivors are in the WEAK status.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the number of weak survivors.
 int GameState::countWeakSurvivors() const {
     int count = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::WEAK) {
-            count = count + 1;
-        }
+        if (survivors[i].status == SurvivorStatus::WEAK) count++;
     }
     return count;
 }
 
-// Function: countMutatedSurvivors
-// What it does: This function counts how many survivors are in the MUTATED status.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the number of mutated survivors.
 int GameState::countMutatedSurvivors() const {
     int count = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::MUTATED) {
-            count = count + 1;
-        }
+        if (survivors[i].status == SurvivorStatus::MUTATED) count++;
     }
     return count;
 }
 
-// Function: countLivingSurvivors
-// What it does: This function counts how many survivors are still alive.
-//               A living survivor is one whose status is HEALTHY, WEAK, or MUTATED.
-//               Survivors with DECEASED status are not counted.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the total number of living survivors.
 int GameState::countLivingSurvivors() const {
     int count = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::HEALTHY) {
-            count = count + 1;
-        }
-        if (survivors[i].status == SurvivorStatus::WEAK) {
-            count = count + 1;
-        }
-        if (survivors[i].status == SurvivorStatus::MUTATED) {
-            count = count + 1;
+        SurvivorStatus s = survivors[i].status;
+        if (s == SurvivorStatus::HEALTHY ||
+            s == SurvivorStatus::WEAK    ||
+            s == SurvivorStatus::MUTATED) {
+            count++;
         }
     }
     return count;
 }
 
-// Function: resetDailyStates
-// What it does: This function resets the temporary daily states at the start of each day.
-//               It clears the list of expedition members from the previous day,
-//               and sets the wasTreatedToday flag back to false.
-// Input: This function takes no input parameters.
-// Output: This function does not return a value. It modifies the object directly.
+// Returns true if any non-deceased survivor has the given trait.
+bool GameState::hasLivingSurvivorWithTrait(SurvivorTrait trait) const {
+    for (int i = 0; i < (int)survivors.size(); i++) {
+        if (survivors[i].status != SurvivorStatus::DECEASED &&
+            survivors[i].trait == trait) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void GameState::resetDailyStates() {
     expeditionMemberIds.clear();
     wasTreatedToday = false;
 }
 
-// Function: calculateRequiredFood
-// What it does: This function calculates how much food is needed for one day.
-//               Each survivor who is HEALTHY or WEAK needs 1 food per day.
-//               Survivors who are MUTATED or DECEASED do not need food.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the total amount of food needed for today.
 int GameState::calculateRequiredFood() const {
-    int totalFoodNeeded = 0;
+    int total = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::HEALTHY) {
-            totalFoodNeeded = totalFoodNeeded + 1;
-        }
-        if (survivors[i].status == SurvivorStatus::WEAK) {
-            totalFoodNeeded = totalFoodNeeded + 1;
+        if (survivors[i].status == SurvivorStatus::HEALTHY ||
+            survivors[i].status == SurvivorStatus::WEAK) {
+            total++;
         }
     }
-    return totalFoodNeeded;
+    return total;
 }
 
-// Function: calculateRequiredWater
-// What it does: This function calculates how much water is needed for one day.
-//               Each survivor who is HEALTHY or WEAK needs 1 water per day.
-//               Survivors who are MUTATED or DECEASED do not need water.
-// Input: This function takes no input parameters.
-// Output: Returns an integer, which is the total amount of water needed for today.
 int GameState::calculateRequiredWater() const {
-    int totalWaterNeeded = 0;
+    int total = 0;
     for (int i = 0; i < (int)survivors.size(); i++) {
-        if (survivors[i].status == SurvivorStatus::HEALTHY) {
-            totalWaterNeeded = totalWaterNeeded + 1;
-        }
-        if (survivors[i].status == SurvivorStatus::WEAK) {
-            totalWaterNeeded = totalWaterNeeded + 1;
+        if (survivors[i].status == SurvivorStatus::HEALTHY ||
+            survivors[i].status == SurvivorStatus::WEAK) {
+            total++;
         }
     }
-    return totalWaterNeeded;
+    return total;
 }
