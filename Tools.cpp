@@ -204,7 +204,7 @@ bool loadGame(GameState& state) {
         state.survivors.push_back(s);
     }
 
-    // Reset transient daily state — these are not saved and should always
+    // Reset transient daily state - these are not saved and should always
     // start cleanly when resuming.
     state.expeditionMemberIds.clear();
     state.wasTreatedToday = false;
