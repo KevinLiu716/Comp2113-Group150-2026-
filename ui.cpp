@@ -1,7 +1,8 @@
 // ui.cpp
 // Implementation of the UI class. Renders all screens and handles input.
-// Uses ANSI escape codes for color and Unicode box-drawing characters
-// for borders. Output is plain text; works in any UTF-8 capable terminal.
+// Uses ANSI escape codes for color and pure ASCII characters for borders
+// and icons. Output is plain 7-bit ASCII; works in any terminal,
+// including Linux consoles with no UTF-8 support.
 
 #include "ui.h"
 #include <iostream>
@@ -43,44 +44,9 @@ void UI::clearScreen() {
     #endif
 }
 
-// Decide the display width (in terminal columns) of a Unicode code point.
-// We need this because some characters look like emoji but actually render
-// as one column (e.g. ☢ ✓ ✗ ▶), while others render as two (e.g. 😊 🍞).
-// Wrong width estimates make our framed boxes misalign.
-static int charDisplayWidth(unsigned int cp) {
-    // Single-column blocks (these used to break alignment).
-    if (cp >= 0x2500 && cp <= 0x259F) return 1;  // Box drawing
-    if (cp >= 0x2600 && cp <= 0x26FF) return 1;  // Misc Symbols (☀ ☢ ★)
-    if (cp >= 0x2700 && cp <= 0x27BF) return 1;  // Dingbats (✓ ✗ ▶ ⚡)
-
-    // Wide CJK ranges - always 2 columns.
-    if (cp >= 0x1100 && cp <= 0x115F) return 2;
-    if (cp >= 0x2E80 && cp <= 0x303E) return 2;
-    if (cp >= 0x3041 && cp <= 0x33FF) return 2;
-    if (cp >= 0x3400 && cp <= 0x4DBF) return 2;
-    if (cp >= 0x4E00 && cp <= 0x9FFF) return 2;
-    if (cp >= 0xA000 && cp <= 0xA4CF) return 2;
-    if (cp >= 0xAC00 && cp <= 0xD7A3) return 2;
-    if (cp >= 0xF900 && cp <= 0xFAFF) return 2;
-    if (cp >= 0xFE30 && cp <= 0xFE4F) return 2;
-    if (cp >= 0xFF00 && cp <= 0xFF60) return 2;
-    if (cp >= 0xFFE0 && cp <= 0xFFE6) return 2;
-
-    // Emoji blocks.
-    if (cp >= 0x1F300 && cp <= 0x1F64F) return 2;
-    if (cp >= 0x1F680 && cp <= 0x1F6FF) return 2;
-    if (cp >= 0x1F700 && cp <= 0x1F77F) return 2;
-    if (cp >= 0x1F900 && cp <= 0x1F9FF) return 2;
-    if (cp >= 0x1FA70 && cp <= 0x1FAFF) return 2;
-
-    // Zero-width helpers used in emoji sequences.
-    if (cp == 0xFE0F) return 0;
-    if (cp == 0x200D) return 0;
-    if (cp >= 0x0300 && cp <= 0x036F) return 0;
-
-    return 1;
-}
-
+// Visible length of a string in terminal columns. Since the UI now uses
+// pure ASCII, every printable byte is exactly one column wide; we only
+// have to skip over ANSI color escape sequences (ESC [ ... m).
 int UI::visibleLength(const std::string& text) {
     int len = 0;
     bool inEscape = false;
@@ -91,48 +57,27 @@ int UI::visibleLength(const std::string& text) {
             if (c == 'm') inEscape = false;
             continue;
         }
-        unsigned int cp = 0;
-        int extra = 0;
-        if ((c & 0x80) == 0) {
-            cp = c;
-        } else if ((c & 0xE0) == 0xC0) {
-            cp = c & 0x1F; extra = 1;
-        } else if ((c & 0xF0) == 0xE0) {
-            cp = c & 0x0F; extra = 2;
-        } else if ((c & 0xF8) == 0xF0) {
-            cp = c & 0x07; extra = 3;
-        } else {
-            len += 1;
-            continue;
-        }
-        for (int k = 0; k < extra; k++) {
-            if (i + 1 >= text.size()) break;
-            unsigned char nb = text[i + 1];
-            if ((nb & 0xC0) != 0x80) break;
-            cp = (cp << 6) | (nb & 0x3F);
-            i++;
-        }
-        len += charDisplayWidth(cp);
+        len += 1;
     }
     return len;
 }
 
 void UI::drawTopBorder(int width) {
-    std::cout << CYAN << "╔";
-    for (int i = 0; i < width - 2; i++) std::cout << "═";
-    std::cout << "╗" << RESET << "\n";
+    std::cout << CYAN << "+";
+    for (int i = 0; i < width - 2; i++) std::cout << "=";
+    std::cout << "+" << RESET << "\n";
 }
 
 void UI::drawBottomBorder(int width) {
-    std::cout << CYAN << "╚";
-    for (int i = 0; i < width - 2; i++) std::cout << "═";
-    std::cout << "╝" << RESET << "\n";
+    std::cout << CYAN << "+";
+    for (int i = 0; i < width - 2; i++) std::cout << "=";
+    std::cout << "+" << RESET << "\n";
 }
 
 void UI::drawMidBorder(int width) {
-    std::cout << CYAN << "╠";
-    for (int i = 0; i < width - 2; i++) std::cout << "═";
-    std::cout << "╣" << RESET << "\n";
+    std::cout << CYAN << "+";
+    for (int i = 0; i < width - 2; i++) std::cout << "-";
+    std::cout << "+" << RESET << "\n";
 }
 
 void UI::drawCentered(const std::string& text, int width) {
@@ -142,21 +87,100 @@ void UI::drawCentered(const std::string& text, int width) {
     int rightPad = width - 2 - textLen - pad;
     if (rightPad < 0) rightPad = 0;
 
-    std::cout << CYAN << "║" << RESET;
+    std::cout << CYAN << "|" << RESET;
     for (int i = 0; i < pad; i++) std::cout << " ";
     std::cout << text;
     for (int i = 0; i < rightPad; i++) std::cout << " ";
-    std::cout << CYAN << "║" << RESET << "\n";
+    std::cout << CYAN << "|" << RESET << "\n";
 }
 
-void UI::drawLeft(const std::string& text, int width) {
-    int textLen = visibleLength(text);
-    int rightPad = width - 2 - 2 - textLen;
+// Print one already-fitting framed line, with a left margin of 2 spaces
+// and a right pad to align the closing "|" at column `width`.
+static void emitFramedLine(const std::string& s,
+                           int visibleLen,
+                           int width,
+                           const std::string& cyan,
+                           const std::string& reset) {
+    int rightPad = width - 2 - 2 - visibleLen;
     if (rightPad < 0) rightPad = 0;
-
-    std::cout << CYAN << "║" << RESET << "  " << text;
+    std::cout << cyan << "|" << reset << "  " << s;
     for (int i = 0; i < rightPad; i++) std::cout << " ";
-    std::cout << CYAN << "║" << RESET << "\n";
+    std::cout << cyan << "|" << reset << "\n";
+}
+
+// Print a left-justified framed line. If `text` is too long to fit the
+// inner content width (= width - 4), it is automatically wrapped at
+// space boundaries onto multiple framed lines so that nothing ever
+// overflows the right border. ANSI color escape sequences are preserved
+// (they have zero visible width and are passed through).
+void UI::drawLeft(const std::string& text, int width) {
+    const int innerWidth = width - 4;  // 2 for borders, 2 for left margin
+
+    int textLen = visibleLength(text);
+    if (textLen <= innerWidth) {
+        emitFramedLine(text, textLen, width, CYAN, RESET);
+        return;
+    }
+
+    // The line is too long; wrap on spaces. We walk the string keeping
+    // track of three things in parallel:
+    //   - the byte position `i`
+    //   - the visible column `col` reached if we printed up to `i`
+    //   - the most recent space position in the *current chunk*, used as
+    //     a break point when we overflow.
+    const std::string& t = text;
+    size_t i = 0;
+    while (i < t.size()) {
+        size_t chunkStart = i;
+        size_t lastSpaceByte = std::string::npos;  // byte index AFTER the space
+        int    lastSpaceCol  = 0;                  // visible col at that point
+        int    col = 0;
+        bool   inEscape = false;
+
+        size_t j = i;
+        while (j < t.size() && col < innerWidth) {
+            unsigned char c = (unsigned char)t[j];
+            if (c == '\033') { inEscape = true; j++; continue; }
+            if (inEscape) {
+                if (c == 'm') inEscape = false;
+                j++;
+                continue;
+            }
+            if (c == ' ') {
+                lastSpaceByte = j + 1;  // resume after the space
+                lastSpaceCol  = col;
+            }
+            col++;
+            j++;
+        }
+
+        size_t chunkEnd;
+        size_t nextStart;
+        int    chunkVisLen;
+
+        if (j >= t.size()) {
+            // Remaining text fits entirely on this line.
+            chunkEnd    = t.size();
+            nextStart   = t.size();
+            chunkVisLen = col;
+        } else if (lastSpaceByte != std::string::npos) {
+            // Break at the most recent space we saw.
+            chunkEnd    = lastSpaceByte - 1;   // drop the space itself
+            nextStart   = lastSpaceByte;
+            chunkVisLen = lastSpaceCol;
+            // Skip any extra leading spaces on the next line.
+            while (nextStart < t.size() && t[nextStart] == ' ') nextStart++;
+        } else {
+            // No space in this chunk — must hard-break at the column limit.
+            chunkEnd    = j;
+            nextStart   = j;
+            chunkVisLen = col;
+        }
+
+        std::string chunk = t.substr(chunkStart, chunkEnd - chunkStart);
+        emitFramedLine(chunk, chunkVisLen, width, CYAN, RESET);
+        i = nextStart;
+    }
 }
 
 std::string UI::progressBar(int current, int max, int length) {
@@ -172,19 +196,19 @@ std::string UI::progressBar(int current, int max, int length) {
     else color = RED;
 
     std::string bar = color;
-    for (int i = 0; i < filled; i++) bar += "█";
+    for (int i = 0; i < filled; i++) bar += "#";
     bar += DIM;
-    for (int i = filled; i < length; i++) bar += "░";
+    for (int i = filled; i < length; i++) bar += "-";
     bar += RESET;
     return bar;
 }
 
 std::string UI::statusIcon(SurvivorStatus s) {
     switch (s) {
-        case SurvivorStatus::HEALTHY:  return GREEN   + std::string("😊") + RESET;
-        case SurvivorStatus::WEAK:     return YELLOW  + std::string("🤒") + RESET;
-        case SurvivorStatus::MUTATED:  return MAGENTA + std::string("👹") + RESET;
-        case SurvivorStatus::DECEASED: return DIM     + std::string("💀") + RESET;
+        case SurvivorStatus::HEALTHY:  return GREEN   + std::string("[OK]") + RESET;
+        case SurvivorStatus::WEAK:     return YELLOW  + std::string("[WK]") + RESET;
+        case SurvivorStatus::MUTATED:  return MAGENTA + std::string("[MU]") + RESET;
+        case SurvivorStatus::DECEASED: return DIM     + std::string("[XX]") + RESET;
     }
     return "?";
 }
@@ -236,7 +260,7 @@ int UI::getValidChoice(int minChoice, int maxChoice) {
                 return choice;
             }
         } catch (...) {
-            // Not a number — fall through to error message.
+            // Not a number - fall through to error message.
         }
         std::cout << RED << "  Invalid input. Enter a number between "
                   << minChoice << " and " << maxChoice
@@ -272,18 +296,17 @@ void UI::showStartMenu() {
     clearScreen();
     std::cout << "\n";
     std::cout << RED << BOLD;
-    std::cout << "   ███████╗██╗  ██╗███████╗██╗  ████████╗███████╗██████╗ \n";
-    std::cout << "   ██╔════╝██║  ██║██╔════╝██║  ╚══██╔══╝██╔════╝██╔══██╗\n";
-    std::cout << "   ███████╗███████║█████╗  ██║     ██║   █████╗  ██████╔╝\n";
-    std::cout << "   ╚════██║██╔══██║██╔══╝  ██║     ██║   ██╔══╝  ██╔══██╗\n";
-    std::cout << "   ███████║██║  ██║███████╗███████╗██║   ███████╗██║  ██║\n";
-    std::cout << "   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝   ╚══════╝╚═╝  ╚═╝\n";
+    std::cout << "   ####   ##  ##  ######  ##     ######  ######  #####    \n";
+    std::cout << "  ##      ##  ##  ##      ##       ##    ##      ##  ##   \n";
+    std::cout << "   ###    ######  ####    ##       ##    ####    #####    \n";
+    std::cout << "     ##   ##  ##  ##      ##       ##    ##      ##  ##   \n";
+    std::cout << "  ####    ##  ##  ######  ######   ##    ######  ##   ##  \n";
     std::cout << RESET;
     std::cout << YELLOW << "                    10 DAYS TO SURVIVE\n" << RESET;
     std::cout << "\n";
 
     drawTopBorder();
-    drawCentered("☢  POST-APOCALYPTIC SURVIVAL  ☢");
+    drawCentered("**  POST-APOCALYPTIC SURVIVAL  **");
     drawMidBorder();
     drawLeft("The apocalypse came without warning.");
     drawLeft("Radioactive dust covers the world outside.");
@@ -299,7 +322,7 @@ bool UI::askContinueGame() {
     clearScreen();
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  💾  SAVE FILE FOUND  💾  ") + RESET);
+    drawCentered(BOLD + std::string("  [SAVE]  SAVE FILE FOUND  [SAVE]  ") + RESET);
     drawMidBorder();
     drawLeft("");
     drawLeft("A previous game was saved on this machine.");
@@ -308,7 +331,7 @@ bool UI::askContinueGame() {
     drawLeft(RED   + std::string("  N") + RESET + " - Start a new game (saved data will be erased)");
     drawLeft("");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Continue saved game? (Y/N): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Continue saved game? (Y/N): ";
     return getYesNo();
 }
 
@@ -323,7 +346,7 @@ Difficulty UI::askDifficulty() {
     drawLeft(RED    + std::string("  2.  HARD  ") + RESET + "  Tighter resources, harsher fate");
     drawLeft("");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Your choice (1-2): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Your choice (1-2): ";
     int c = getValidChoice(1, 2);
     return (c == 1) ? Difficulty::EASY : Difficulty::HARD;
 }
@@ -337,21 +360,21 @@ int UI::askSupplyPlan(Difficulty diff) {
     drawLeft("");
     if (diff == Difficulty::EASY) {
         drawLeft(YELLOW + std::string("  A. Basic Stockpile") + RESET);
-        drawLeft("     🍞 Food x18   💧 Water x18   💊 Medicine x1");
+        drawLeft("     [F] Food x18   [W] Water x18   [M] Medicine x1");
         drawLeft("");
         drawLeft(YELLOW + std::string("  B. Medical Priority") + RESET);
-        drawLeft("     🍞 Food x8    💧 Water x8    💊 Medicine x2");
+        drawLeft("     [F] Food x8    [W] Water x8    [M] Medicine x2");
     } else {
         drawLeft(YELLOW + std::string("  A. All-in") + RESET);
-        drawLeft("     🍞 Food x18   💧 Water x18   💊 Medicine x0");
+        drawLeft("     [F] Food x18   [W] Water x18   [M] Medicine x0");
         drawLeft(DIM + std::string("     (One survivor starts as Weak)") + RESET);
         drawLeft("");
         drawLeft(YELLOW + std::string("  B. Frugal Start") + RESET);
-        drawLeft("     🍞 Food x6    💧 Water x6    💊 Medicine x2");
+        drawLeft("     [F] Food x6    [W] Water x6    [M] Medicine x2");
     }
     drawLeft("");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Your choice (1=A, 2=B): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Your choice (1=A, 2=B): ";
     return getValidChoice(1, 2);
 }
 
@@ -364,7 +387,7 @@ void UI::showDailyReport(const GameState& state) {
     std::cout << "\n";
 
     std::ostringstream title;
-    title << BOLD << YELLOW << "  ☀  DAY " << state.currentDay << " / 10  ☀  " << RESET;
+    title << BOLD << YELLOW << "  *  DAY " << state.currentDay << " / 10  *  " << RESET;
     drawTopBorder();
     drawCentered(title.str());
     drawMidBorder();
@@ -372,10 +395,10 @@ void UI::showDailyReport(const GameState& state) {
     drawLeft(BOLD + std::string("PERSONNEL STATUS") + RESET);
     drawLeft("");
     std::ostringstream summary;
-    summary << "😊 " << GREEN  << state.countHealthySurvivors() << RESET
-            << "   🤒 " << YELLOW << state.countWeakSurvivors() << RESET
-            << "   👹 " << MAGENTA<< state.countMutatedSurvivors() << RESET
-            << "   💀 " << DIM    << state.countSurvivorsByStatus(SurvivorStatus::DECEASED) << RESET;
+    summary << "[OK] " << GREEN  << state.countHealthySurvivors() << RESET
+            << "   [WK] " << YELLOW << state.countWeakSurvivors() << RESET
+            << "   [MU] " << MAGENTA<< state.countMutatedSurvivors() << RESET
+            << "   [XX] " << DIM    << state.countSurvivorsByStatus(SurvivorStatus::DECEASED) << RESET;
     drawLeft(summary.str());
     drawLeft("");
 
@@ -402,17 +425,17 @@ void UI::showDailyReport(const GameState& state) {
     drawLeft("");
 
     std::ostringstream foodLine, waterLine, medLine;
-    foodLine  << "🍞 Food     " << progressBar(state.food, 18) << "  " << state.food;
-    waterLine << "💧 Water    " << progressBar(state.water, 18) << "  " << state.water;
-    medLine   << "💊 Medicine " << progressBar(state.medicine, 5) << "  " << state.medicine;
+    foodLine  << "[F] Food     " << progressBar(state.food, 18) << "  " << state.food;
+    waterLine << "[W] Water    " << progressBar(state.water, 18) << "  " << state.water;
+    medLine   << "[M] Medicine " << progressBar(state.medicine, 5) << "  " << state.medicine;
     drawLeft(foodLine.str());
     drawLeft(waterLine.str());
     drawLeft(medLine.str());
     drawLeft("");
 
     std::ostringstream items;
-    items << "📻 Radio: " << (state.hasRadio ? (GREEN + std::string("✓") + RESET) : (DIM + std::string("✗") + RESET))
-          << "    📜 Note: " << ((state.hasNote && !state.usedNoteEffect) ? (GREEN + std::string("✓") + RESET) : (DIM + std::string("✗") + RESET));
+    items << "[R] Radio: " << (state.hasRadio ? (GREEN + std::string("Y") + RESET) : (DIM + std::string("N") + RESET))
+          << "    [N] Note: " << ((state.hasNote && !state.usedNoteEffect) ? (GREEN + std::string("Y") + RESET) : (DIM + std::string("N") + RESET));
     drawLeft(items.str());
     drawLeft("");
     drawMidBorder();
@@ -429,30 +452,30 @@ void UI::showDailyReport(const GameState& state) {
 bool UI::askTreat(const GameState& state) {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  💊  TREATMENT PHASE  💊  ") + RESET);
+    drawCentered(BOLD + std::string("  [M]  TREATMENT PHASE  [M]  ") + RESET);
     drawMidBorder();
 
     int weakCount = state.countWeakSurvivors();
     bool hasDoctor = state.hasLivingSurvivorWithTrait(SurvivorTrait::DOCTOR);
 
     std::ostringstream w, m;
-    w << "🤒 Weak survivors:    " << weakCount;
-    m << "💊 Medicine in stock: " << state.medicine;
+    w << "[WK] Weak survivors:    " << weakCount;
+    m << "[M]  Medicine in stock: " << state.medicine;
     drawLeft(w.str());
     drawLeft(m.str());
     if (hasDoctor) {
-        drawLeft(CYAN + std::string("(A doctor is alive — treatment is free!)") + RESET);
+        drawLeft(CYAN + std::string("(A doctor is alive - treatment is free!)") + RESET);
     }
     drawLeft("");
 
     if (weakCount == 0) {
-        drawLeft(GREEN + std::string("  ✓ No one needs treatment today.") + RESET);
+        drawLeft(GREEN + std::string("  [OK] No one needs treatment today.") + RESET);
         drawBottomBorder();
         waitForEnter();
         return false;
     }
     if (state.medicine == 0 && !hasDoctor) {
-        drawLeft(RED + std::string("  ✗ No medicine left and no doctor. Cannot treat.") + RESET);
+        drawLeft(RED + std::string("  [X] No medicine left and no doctor. Cannot treat.") + RESET);
         drawBottomBorder();
         waitForEnter();
         return false;
@@ -460,14 +483,14 @@ bool UI::askTreat(const GameState& state) {
 
     drawLeft("Heal " + std::to_string(weakCount) + " weak survivor(s)?");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Treat now? (Y/N): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Treat now? (Y/N): ";
     return getYesNo();
 }
 
 bool UI::askExpedition(const GameState& state) {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🚪  EXPEDITION PHASE  🚪  ") + RESET);
+    drawCentered(BOLD + std::string("  [E]  EXPEDITION PHASE  [E]  ") + RESET);
     drawMidBorder();
 
     int able = state.countHealthySurvivors() + state.countMutatedSurvivors();
@@ -480,7 +503,7 @@ bool UI::askExpedition(const GameState& state) {
     drawLeft("");
 
     if (maxMembers == 0) {
-        drawLeft(RED + std::string("  ✗ Not enough able survivors to send out.") + RESET);
+        drawLeft(RED + std::string("  [X] Not enough able survivors to send out.") + RESET);
         drawBottomBorder();
         waitForEnter();
         return false;
@@ -489,12 +512,12 @@ bool UI::askExpedition(const GameState& state) {
     drawLeft("Send an expedition to scavenge outside?");
     drawLeft(DIM + std::string("(Risky, but the only way to find supplies)") + RESET);
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Send out? (Y/N): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Send out? (Y/N): ";
     return getYesNo();
 }
 
 int UI::askExpeditionCount(int maxCount) {
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "How many to send (1-" << maxCount << ")? ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "How many to send (1-" << maxCount << ")? ";
     return getValidChoice(1, maxCount);
 }
 
@@ -523,7 +546,7 @@ std::vector<int> UI::askExpeditionMembers(const GameState& state, int count) {
 
     std::vector<int> chosen;
     for (int i = 0; i < count; i++) {
-        std::cout << "\n  " << CYAN << "▶ " << RESET << "Pick member #" << (i + 1)
+        std::cout << "\n  " << CYAN << "> " << RESET << "Pick member #" << (i + 1)
                   << " (1-" << available.size() << "): ";
         int pick = getValidChoice(1, (int)available.size());
         int realIndex = available[pick - 1];
@@ -543,7 +566,7 @@ std::vector<int> UI::askExpeditionMembers(const GameState& state, int count) {
 ExpeditionEventType UI::askExpeditionDestination(const GameState& state) {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🗺  CHOOSE A DESTINATION  🗺  ") + RESET);
+    drawCentered(BOLD + std::string("  [MAP]  CHOOSE A DESTINATION  [MAP]  ") + RESET);
     drawMidBorder();
     drawLeft("Where will the expedition go today?");
     drawLeft("");
@@ -571,7 +594,7 @@ ExpeditionEventType UI::askExpeditionDestination(const GameState& state) {
     }
 
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET
+    std::cout << "\n  " << CYAN << "> " << RESET
               << "Your choice (1-" << maxChoice << "): ";
     int choice = getValidChoice(1, maxChoice);
 
@@ -594,36 +617,36 @@ ExpeditionEventType UI::askExpeditionDestination(const GameState& state) {
 bool UI::askDoorChoice() {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🚪 SOMEONE IS KNOCKING 🚪  ") + RESET);
+    drawCentered(BOLD + std::string("  [!] SOMEONE IS KNOCKING [!]  ") + RESET);
     drawMidBorder();
     drawLeft("  1. Open the door");
     drawLeft("  2. Keep it shut");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Your choice (1-2): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Your choice (1-2): ";
     return getValidChoice(1, 2) == 1;
 }
 
 int UI::askCampChoice() {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🏕  OTHER SURVIVORS' CAMP  🏕  ") + RESET);
+    drawCentered(BOLD + std::string("  [C]  OTHER SURVIVORS' CAMP  [C]  ") + RESET);
     drawMidBorder();
     drawLeft("  1. Request help (negotiate)");
     drawLeft("  2. Rob (take by force)");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Your choice (1-2): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Your choice (1-2): ";
     return getValidChoice(1, 2);
 }
 
 int UI::askClearChoice() {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + std::string("  🏚  PERIMETER CLEARING  🏚  ") + RESET);
+    drawCentered(BOLD + std::string("  [P]  PERIMETER CLEARING  [P]  ") + RESET);
     drawMidBorder();
     drawLeft("  1. Clear outer area  (safer, smaller reward)");
     drawLeft("  2. Search deeper     (riskier, may find a note)");
     drawBottomBorder();
-    std::cout << "\n  " << CYAN << "▶ " << RESET << "Your choice (1-2): ";
+    std::cout << "\n  " << CYAN << "> " << RESET << "Your choice (1-2): ";
     return getValidChoice(1, 2);
 }
 
@@ -634,7 +657,7 @@ int UI::askClearChoice() {
 void UI::showEventResult(const std::string& title, const std::string& text) {
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(YELLOW + BOLD + std::string("  ⚡  ") + title + std::string("  ⚡  ") + RESET);
+    drawCentered(YELLOW + BOLD + std::string("  !  ") + title + std::string("  !  ") + RESET);
     drawMidBorder();
     drawLeft("");
 
@@ -656,7 +679,7 @@ void UI::showDayEnd(const GameState& state) {
     std::cout << "\n";
     drawTopBorder();
     std::ostringstream title;
-    title << BOLD << "🌙 END OF DAY " << state.currentDay << " 🌙" << RESET;
+    title << BOLD << "(  END OF DAY " << state.currentDay << "  )" << RESET;
     drawCentered(title.str());
     drawMidBorder();
     std::ostringstream s1, s2;
@@ -683,74 +706,76 @@ struct EndingTheme {
 };
 
 // Returns the visual theme matching the given ending type.
+// All banners are made of pure ASCII (#, space) to avoid rendering issues
+// on Linux terminals that lack UTF-8 box-drawing fonts.
 static EndingTheme getEndingTheme(EndingType type) {
     EndingTheme t;
     switch (type) {
         case EndingType::TRAGIC_END:
             t.color = "\033[31m";
-            t.subtitle = "  💀  TRAGIC END  💀  ";
-            t.banner[0] = "    ██████╗  █████╗ ███╗   ███╗███████╗     ██████╗ ██╗   ██╗███████╗██████╗ ";
-            t.banner[1] = "   ██╔════╝ ██╔══██╗████╗ ████║██╔════╝    ██╔═══██╗██║   ██║██╔════╝██╔══██╗";
-            t.banner[2] = "   ██║  ███╗███████║██╔████╔██║█████╗      ██║   ██║██║   ██║█████╗  ██████╔╝";
-            t.banner[3] = "   ██║   ██║██╔══██║██║╚██╔╝██║██╔══╝      ██║   ██║╚██╗ ██╔╝██╔══╝  ██╔══██╗";
-            t.banner[4] = "   ╚██████╔╝██║  ██║██║ ╚═╝ ██║███████╗    ╚██████╔╝ ╚████╔╝ ███████╗██║  ██║";
-            t.banner[5] = "    ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝     ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝";
+            t.subtitle = "  [XX]  TRAGIC END  [XX]  ";
+            t.banner[0] = "    #####     #####    #     #   ######        #####    #     #   ######   #####  ";
+            t.banner[1] = "   #          #     #   ##   ##   #            #     #   #     #   #        #    # ";
+            t.banner[2] = "   #   ###    #######   # # # #   ####         #     #   #     #   ####     #####  ";
+            t.banner[3] = "   #     #    #     #   #  #  #   #            #     #    #   #    #        #  #   ";
+            t.banner[4] = "    #####     #     #   #     #   ######        #####      ###     ######   #   # ";
+            t.banner[5] = "                                                                                   ";
             break;
 
         case EndingType::ORDER_RESTORED:
             t.color = "\033[32m";
-            t.subtitle = "  🌅  ORDER RESTORED  🌅  ";
-            t.banner[0] = "   ██╗   ██╗██╗ ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗";
-            t.banner[1] = "   ██║   ██║██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝";
-            t.banner[2] = "   ██║   ██║██║██║        ██║   ██║   ██║██████╔╝ ╚████╔╝ ";
-            t.banner[3] = "   ╚██╗ ██╔╝██║██║        ██║   ██║   ██║██╔══██╗  ╚██╔╝  ";
-            t.banner[4] = "    ╚████╔╝ ██║╚██████╗   ██║   ╚██████╔╝██║  ██║   ██║   ";
-            t.banner[5] = "     ╚═══╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ";
+            t.subtitle = "  [*]  ORDER RESTORED  [*]  ";
+            t.banner[0] = "   #     #   #    ######   ######   #####    ######   #     #  ";
+            t.banner[1] = "   #     #   #    #           #     #     #   #    #   #   #   ";
+            t.banner[2] = "   #     #   #    #           #     #     #   ######    ###    ";
+            t.banner[3] = "    #   #    #    #           #     #     #   #  #       #     ";
+            t.banner[4] = "     ###     #    ######      #      #####    #    #     #     ";
+            t.banner[5] = "                                                                ";
             break;
 
         case EndingType::LONE_SURVIVOR:
             t.color = "\033[33m";
-            t.subtitle = "  🌙  LONE SURVIVOR  🌙  ";
-            t.banner[0] = "      █████╗ ██╗      ██████╗ ███╗   ██╗███████╗";
-            t.banner[1] = "     ██╔══██╗██║     ██╔═══██╗████╗  ██║██╔════╝";
-            t.banner[2] = "     ███████║██║     ██║   ██║██╔██╗ ██║█████╗  ";
-            t.banner[3] = "     ██╔══██║██║     ██║   ██║██║╚██╗██║██╔══╝  ";
-            t.banner[4] = "     ██║  ██║███████╗╚██████╔╝██║ ╚████║███████╗";
-            t.banner[5] = "     ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝";
+            t.subtitle = "  (C  LONE SURVIVOR  C)  ";
+            t.banner[0] = "      #####    #         #####    #     #   ######  ";
+            t.banner[1] = "     #     #   #        #     #   ##    #   #       ";
+            t.banner[2] = "     #######   #        #     #   # #   #   ####    ";
+            t.banner[3] = "     #     #   #        #     #   #  #  #   #       ";
+            t.banner[4] = "     #     #   #######   #####    #   ###   ######  ";
+            t.banner[5] = "                                                    ";
             break;
 
         case EndingType::SYMBIOTIC_EVOLUTION:
             t.color = "\033[35m";
-            t.subtitle = "  👹  SYMBIOTIC EVOLUTION  👹  ";
-            t.banner[0] = "   ███╗   ███╗██╗   ██╗████████╗ █████╗ ████████╗███████╗";
-            t.banner[1] = "   ████╗ ████║██║   ██║╚══██╔══╝██╔══██╗╚══██╔══╝██╔════╝";
-            t.banner[2] = "   ██╔████╔██║██║   ██║   ██║   ███████║   ██║   █████╗  ";
-            t.banner[3] = "   ██║╚██╔╝██║██║   ██║   ██║   ██╔══██║   ██║   ██╔══╝  ";
-            t.banner[4] = "   ██║ ╚═╝ ██║╚██████╔╝   ██║   ██║  ██║   ██║   ███████╗";
-            t.banner[5] = "   ╚═╝     ╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚══════╝";
+            t.subtitle = "  [MU]  SYMBIOTIC EVOLUTION  [MU]  ";
+            t.banner[0] = "   #     #  #     #  ######    #####    #######  ######  ";
+            t.banner[1] = "   ##   ##  #     #     #     #     #      #     #       ";
+            t.banner[2] = "   # # # #  #     #     #     #######      #     ####    ";
+            t.banner[3] = "   #  #  #  #     #     #     #     #      #     #       ";
+            t.banner[4] = "   #     #   #####      #     #     #      #     ######  ";
+            t.banner[5] = "                                                          ";
             break;
 
         case EndingType::MARAUDERS:
             t.color = "\033[1m\033[31m";
-            t.subtitle = "  ⚔  MARAUDERS  ⚔  ";
-            t.banner[0] = "   ██████╗  █████╗ ███╗   ██╗██████╗ ██╗████████╗███████╗";
-            t.banner[1] = "   ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║╚══██╔══╝██╔════╝";
-            t.banner[2] = "   ██████╔╝███████║██╔██╗ ██║██║  ██║██║   ██║   ███████╗";
-            t.banner[3] = "   ██╔══██╗██╔══██║██║╚██╗██║██║  ██║██║   ██║   ╚════██║";
-            t.banner[4] = "   ██████╔╝██║  ██║██║ ╚████║██████╔╝██║   ██║   ███████║";
-            t.banner[5] = "   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚═╝   ╚═╝   ╚══════╝";
+            t.subtitle = "  XX  MARAUDERS  XX  ";
+            t.banner[0] = "   ######    #####    #     #  ######   #  #######  ######  ";
+            t.banner[1] = "   #     #   #    #   ##    #  #     #  #     #     #       ";
+            t.banner[2] = "   ######    ######   # #   #  #     #  #     #     ######  ";
+            t.banner[3] = "   #     #   #    #   #  #  #  #     #  #     #          #  ";
+            t.banner[4] = "   ######    #    #   #   ###  ######   #     #     ######  ";
+            t.banner[5] = "                                                             ";
             break;
 
         case EndingType::STRUGGLE_FOR_SURVIVAL:
         default:
             t.color = "\033[36m";
-            t.subtitle = "  ☀  STRUGGLE FOR SURVIVAL  ☀  ";
-            t.banner[0] = "   ███████╗██╗   ██╗██████╗ ██╗   ██╗██╗██╗   ██╗███████╗██████╗ ";
-            t.banner[1] = "   ██╔════╝██║   ██║██╔══██╗██║   ██║██║██║   ██║██╔════╝██╔══██╗";
-            t.banner[2] = "   ███████╗██║   ██║██████╔╝██║   ██║██║██║   ██║█████╗  ██║  ██║";
-            t.banner[3] = "   ╚════██║██║   ██║██╔══██╗╚██╗ ██╔╝██║╚██╗ ██╔╝██╔══╝  ██║  ██║";
-            t.banner[4] = "   ███████║╚██████╔╝██║  ██║ ╚████╔╝ ██║ ╚████╔╝ ███████╗██████╔╝";
-            t.banner[5] = "   ╚══════╝ ╚═════╝ ╚═╝  ╚═╝  ╚═══╝  ╚═╝  ╚═══╝  ╚══════╝╚═════╝ ";
+            t.subtitle = "  *  STRUGGLE FOR SURVIVAL  *  ";
+            t.banner[0] = "   ######    #     #  ######   #     #  #  #     #  ######   ######   ";
+            t.banner[1] = "   #         #     #  #    #   #     #  #  #     #  #        #    #   ";
+            t.banner[2] = "   ######    #     #  ######   #     #  #  #     #  ####     #     #  ";
+            t.banner[3] = "        #    #     #  #  #      #   #   #   #   #   #        #     #  ";
+            t.banner[4] = "   ######     #####   #    #     ###    #    ###    ######   ######   ";
+            t.banner[5] = "                                                                       ";
             break;
     }
     return t;
@@ -793,7 +818,7 @@ void UI::showEnding(const GameState& state) {
 }
 
 void UI::showMessage(const std::string& msg) {
-    std::cout << "  " << CYAN << "▶ " << RESET << msg << "\n";
+    std::cout << "  " << CYAN << "> " << RESET << msg << "\n";
 }
 
 // Final screen shown after the player types 'q' to save and quit.
@@ -801,7 +826,7 @@ void UI::showQuitConfirmation(int currentDay) {
     clearScreen();
     std::cout << "\n";
     drawTopBorder();
-    drawCentered(BOLD + CYAN + std::string("  💾  GAME SAVED  💾  ") + RESET);
+    drawCentered(BOLD + CYAN + std::string("  [SAVE]  GAME SAVED  [SAVE]  ") + RESET);
     drawMidBorder();
     drawLeft("");
     drawLeft("Your progress has been saved.");
