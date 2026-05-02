@@ -1,6 +1,4 @@
 // ResourceManager.cpp
-// This file contains the implementation of the resource management functions.
-// These functions handle game initialization, daily resource consumption,
 // medicine treatment, and the sick day counter updates.
 
 #include "player.h"
@@ -25,10 +23,29 @@ void initResources(GameState& state, Difficulty diff, int plan) {
     // Set the current day to day 1
     state.currentDay = 1;
 
-    // Clear the survivors list and create 6 new healthy survivors
+    // Clear the survivors list and create 6 new healthy survivors,
+    // each with a fixed name and a randomly assigned trait.
     state.survivors.clear();
+    const char* names[6] = {"Alice", "Bob", "Carol", "David", "Eve", "Frank"};
+    SurvivorTrait traitPool[6] = {
+        SurvivorTrait::DOCTOR,
+        SurvivorTrait::FRAIL,
+        SurvivorTrait::SCOUT,
+        SurvivorTrait::ENGINEER,
+        SurvivorTrait::SOLDIER,
+        SurvivorTrait::LUCKY
+    };
+    // Fisher-Yates shuffle so each game has different trait assignments.
+    for (int i = 5; i > 0; i--) {
+        int j = rand() % (i + 1);
+        SurvivorTrait tmp = traitPool[i];
+        traitPool[i] = traitPool[j];
+        traitPool[j] = tmp;
+    }
     for (int i = 0; i < 6; i++) {
         Survivor newSurvivor;
+        newSurvivor.name = names[i];
+        newSurvivor.trait = traitPool[i];
         state.survivors.push_back(newSurvivor);
     }
 
@@ -138,10 +155,15 @@ void consumeDaily(GameState& state) {
         // Parameters: state, count=k, includeHealthy=true, includeWeak=false, includeMutated=false
         std::vector<int> candidates = selectRandomSurvivors(state, k, true, false, false);
 
-        // Each selected survivor has a 50 percent chance to become weak
+        // Each selected survivor has a 50% chance to become weak.
+        // TRAIT: a FRAIL survivor has +20% chance instead (70%).
         for (int i = 0; i < (int)candidates.size(); i++) {
             int survivorIndex = candidates[i];
-            bool becomesWeak = checkProbability(0.5);
+            double weakChance = 0.5;
+            if (state.survivors[survivorIndex].trait == SurvivorTrait::FRAIL) {
+                weakChance = 0.7;
+            }
+            bool becomesWeak = checkProbability(weakChance);
             if (becomesWeak == true) {
                 state.survivors[survivorIndex].status = SurvivorStatus::WEAK;
                 state.survivors[survivorIndex].daysWeak = 0;
@@ -164,11 +186,17 @@ void consumeDaily(GameState& state) {
             probability = 1.0;
         }
 
-        // Check every survivor one by one
+        // Check every survivor one by one.
+        // TRAIT: FRAIL survivors get +20% on top of the base chance, capped at 100%.
         for (int i = 0; i < (int)state.survivors.size(); i++) {
             // Only healthy survivors can become weak
             if (state.survivors[i].status == SurvivorStatus::HEALTHY) {
-                bool becomesWeak = checkProbability(probability);
+                double thisChance = probability;
+                if (state.survivors[i].trait == SurvivorTrait::FRAIL) {
+                    thisChance += 0.2;
+                    if (thisChance > 1.0) thisChance = 1.0;
+                }
+                bool becomesWeak = checkProbability(thisChance);
                 if (becomesWeak == true) {
                     state.survivors[i].status = SurvivorStatus::WEAK;
                     state.survivors[i].daysWeak = 0;
@@ -182,19 +210,25 @@ void consumeDaily(GameState& state) {
 // What it does: This function uses 1 medicine to treat all weak survivors.
 //               Every survivor whose status is WEAK will become HEALTHY.
 //               Their daysWeak counter will be reset to 0.
-//               If there is no medicine available (medicine is 0 or less),
-//               this function does nothing and returns immediately.
+//               TRAIT: If any living survivor has the DOCTOR trait, the
+//                      treatment is performed for free (no medicine spent).
+//               If there is no medicine AND no doctor, this function does
+//               nothing.
 // Input: state - a reference to the GameState object.
 // Output: This function does not return a value. It modifies the state directly.
 void treat(GameState& state) {
-    // Check if we have any medicine
-    if (state.medicine <= 0) {
-        // No medicine available, do nothing
+    bool hasDoctor = state.hasLivingSurvivorWithTrait(SurvivorTrait::DOCTOR);
+
+    // Need either medicine OR a doctor to treat.
+    if (state.medicine <= 0 && !hasDoctor) {
         return;
     }
 
-    // Use 1 medicine
-    state.medicine = state.medicine - 1;
+    if (!hasDoctor) {
+        // Normal case: 1 medicine consumed.
+        state.medicine = state.medicine - 1;
+    }
+    // If a doctor is alive, no medicine is consumed.
 
     // Go through every survivor and heal all weak ones
     for (int i = 0; i < (int)state.survivors.size(); i++) {
@@ -226,8 +260,8 @@ void updateSickCounters(GameState& state) {
             state.survivors[i].daysWeak = state.survivors[i].daysWeak + 1;
 
             // Check if this survivor has been weak for too long
-            if (state.survivors[i].daysWeak > 2) {
-                // This survivor has been weak for over 2 days, they die
+            if (state.survivors[i].daysWeak >= 2) {
+                // This survivor has been weak for 2 days, they die
                 state.survivors[i].status = SurvivorStatus::DECEASED;
                 state.survivors[i].daysWeak = 0;
             }
