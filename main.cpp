@@ -1,6 +1,3 @@
-// main_full.cpp - 临时用的完整游戏主循环
-// 等 A 写好正式的 Game.cpp 后删除此文件
-
 #include "ui.h"
 #include "GameState.h"
 #include "EventSystem.h"
