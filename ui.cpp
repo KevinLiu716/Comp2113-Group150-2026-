@@ -7,7 +7,6 @@
 #include "ui.h"
 #include <iostream>
 #include <limits>
-#include <cstdlib>
 #include <sstream>
 
 // ============================================================
@@ -35,13 +34,9 @@ static bool isQuitInput(const std::string& s) {
 // Private helpers
 // ============================================================
 
-// Clear the terminal screen.
+// Clear the terminal screen using the ANSI escape sequence.
 void UI::clearScreen() {
-    #ifdef _WIN32
-        system("cls");
-    #else
-        std::cout << "\033[2J\033[1;1H";
-    #endif
+    std::cout << "\033[2J\033[1;1H";
 }
 
 // Visible length of a string in terminal columns. Since the UI now uses
