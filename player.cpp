@@ -103,10 +103,14 @@ int GameState::countLivingSurvivors() const {
     return count;
 }
 
-// Returns true if any non-deceased survivor has the given trait.
+// Returns true if any non-deceased, non-mutated survivor has the given
+// trait. Mutation is treated as losing one's identity / skills, so a
+// mutated doctor can no longer perform medical treatment, a mutated
+// engineer can no longer engineer, etc.
 bool GameState::hasLivingSurvivorWithTrait(SurvivorTrait trait) const {
     for (int i = 0; i < (int)survivors.size(); i++) {
         if (survivors[i].status != SurvivorStatus::DECEASED &&
+            survivors[i].status != SurvivorStatus::MUTATED  &&
             survivors[i].trait == trait) {
             return true;
         }
