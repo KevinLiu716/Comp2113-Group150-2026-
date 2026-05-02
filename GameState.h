@@ -1,75 +1,113 @@
+// GameState.h
+// Defines the global game state data structure and related enums.
+// Holds everything the game needs: survivors, resources, items, flags.
+
 #ifndef GAMESTATE_H
 #define GAMESTATE_H
 
 #include <vector>
 #include <string>
 
-// 难度等级
+// Difficulty levels chosen at game start.
 enum class Difficulty { EASY, HARD };
 
-// 幸存者状态
+// Possible status of an individual survivor.
 enum class SurvivorStatus { HEALTHY, WEAK, MUTATED, DECEASED };
 
-// 简化幸存者结构
-struct Survivor {
-    SurvivorStatus status;         // 当前状态
-    int daysWeak;                  // 病弱天数（仅当status==WEAK时有效）
-    
-    // 简易构造函数
-    Survivor() : status(SurvivorStatus::HEALTHY), daysWeak(0) {}
-    Survivor(SurvivorStatus s) : status(s), daysWeak(0) {}
+// Personality / role traits for survivors. Each trait gives one passive
+// effect that influences certain events. Three are currently active in
+// the game logic; the others are placeholders for future expansion.
+enum class SurvivorTrait {
+    NONE,
+    DOCTOR,    // Treatment does not consume medicine when this survivor is alive
+    FRAIL,     // +20% chance to become weak from supply shortage
+    SCOUT,     // +1 to expedition resource gain when participating
+    ENGINEER,  // (placeholder) reduces extra costs on expeditions
+    SOLDIER,   // (placeholder) protects from random death on robbery
+    LUCKY      // (placeholder) reduces mutation chance from dreams
 };
 
-// 游戏总状态
+// One of the six possible endings. Set at game over by determineEnding(),
+// and used by the UI to show a matching banner and color.
+enum class EndingType {
+    NONE,                  // Game still in progress
+    TRAGIC_END,            // Everyone died
+    ORDER_RESTORED,        // Rescue arrived (best ending)
+    LONE_SURVIVOR,         // Only one person survived
+    SYMBIOTIC_EVOLUTION,   // Mutated outnumber the living
+    MARAUDERS,             // Survived by robbing other camps
+    STRUGGLE_FOR_SURVIVAL  // Default survival ending
+};
+
+// A single survivor in the shelter.
+struct Survivor {
+    SurvivorStatus status;   // Current health status
+    int daysWeak;            // Days spent in the WEAK state
+    std::string name;        // Display name (e.g. "Alice")
+    SurvivorTrait trait;     // Passive ability
+
+    Survivor()
+        : status(SurvivorStatus::HEALTHY), daysWeak(0),
+          name(""), trait(SurvivorTrait::NONE) {}
+
+    Survivor(SurvivorStatus s)
+        : status(s), daysWeak(0),
+          name(""), trait(SurvivorTrait::NONE) {}
+};
+
+// Holds the entire game state. Passed by reference to almost every function.
 class GameState {
 public:
-    // 基础状态
+    // Core state
     Difficulty difficulty;
     int currentDay;
-    
-    // 幸存者
+
+    // The 6 shelter survivors
     std::vector<Survivor> survivors;
-    
-    // 资源
+
+    // Main resources
     int food;
     int water;
     int medicine;
-    
-    // 特殊道具
-    bool hasRadio;      // 是否拥有收音机
-    bool hasNote;       // 是否拥有纸条
-    bool usedNoteEffect;// 纸条效果（强制触发外出事件7）是否已使用
-    
-    // 临时状态（每日重置）
-    std::vector<int> expeditionMemberIds;  // 当日外出人员索引列表
-    bool wasTreatedToday;                  // 今日是否已治疗
-    
-    // 事件与结局标记
-    bool triggeredEvent6;       // 是否触发过每日事件6（异常信号）
-    int campRobberyCount;       // 抢劫其他营地的次数
-    bool forceEvent5NextDay;    // 下一天是否强制触发每日事件5（不速之客）
-    
-    // 结局
+
+    // Special items / flags
+    bool hasRadio;
+    bool hasNote;
+    bool usedNoteEffect;
+
+    // Temporary daily state (reset each day)
+    std::vector<int> expeditionMemberIds;
+    bool wasTreatedToday;
+
+    // Event and ending tracking flags
+    bool triggeredEvent6;
+    int campRobberyCount;
+    bool forceEvent5NextDay;
+
+    // Ending state
     bool gameEnded;
     std::string endingMessage;
-    
-    // 构造函数
+    EndingType endingType;
+
+    // Constructor
     GameState();
-    
-    // 状态查询辅助函数
+
+    // Status query helpers
     int countSurvivorsByStatus(SurvivorStatus status) const;
     int countHealthySurvivors() const;
     int countWeakSurvivors() const;
     int countMutatedSurvivors() const;
     int countLivingSurvivors() const;
-    
-    // 状态重置函数
+
+    // Helper: does any LIVING survivor have the given trait?
+    bool hasLivingSurvivorWithTrait(SurvivorTrait trait) const;
+
+    // Daily reset
     void resetDailyStates();
-    
-    // 物资消耗计算
+
+    // Daily resource consumption requirements
     int calculateRequiredFood() const;
     int calculateRequiredWater() const;
-
 };
 
 #endif // GAMESTATE_H
