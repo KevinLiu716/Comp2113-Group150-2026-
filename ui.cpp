@@ -11,8 +11,6 @@ void UI::clearScreen() {
     #endif
 }
 
-// 计算字符串的"可视长度"——跳过 ANSI 颜色码
-// 这个对中文/emoji 不完美，但够用
 int UI::visibleLength(const std::string& text) {
     int len = 0;
     bool inEscape = false;

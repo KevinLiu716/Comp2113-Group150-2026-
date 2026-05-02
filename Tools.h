@@ -1,31 +1,38 @@
-// tools.h 的简单示例
+// Tools.h
+// Utility functions used across the game
+
 #ifndef TOOLS_H
 #define TOOLS_H
 
-#include "gamestate.h"
+#include "GameState.h"
 #include <vector>
 
-// 初始化随机种子，在main函数开始时调用一次即可
+// Function: initRandom
+// What it does: Initialize the random seed. Call once at the start of main().
+// Input:  None.
+// Output: None.
 void initRandom();
 
-// 概率判定函数
-// 输入：probability - 一个介于0.0和1.0之间的概率值，例如0.3表示30%的概率
-// 返回：true 表示事件发生，false 表示未发生
+// Function: checkProbability
+// What it does: Decide whether a random event with a given probability happens.
+// Input:  probability - a value between 0.0 and 1.0 (e.g. 0.3 means 30% chance).
+// Output: true if the event happens, false otherwise.
 bool checkProbability(double probability);
 
-// 随机选择幸存者函数
-// 输入： 
-//   state - 游戏状态（用来读取幸存者列表）
-//   count - 想要选择几个人
-//   includeHealthy - 是否从健康(Healthy)状态的人里选
-//   includeWeak - 是否从病弱(Weak)状态的人里选  
-//   includeMutated - 是否从变异(Mutated)状态的人里选
-// 返回：一个向量，里面装着被选中的幸存者在state.survivors中的下标(索引)
-// 注意：只会从活人（非DECEASED）中选，如果符合条件的活人少于count，则返回所有符合条件的。
-std::vector<int> selectRandomSurvivors(const GameState& state, 
-                                      int count, 
-                                      bool includeHealthy = true, 
-                                      bool includeWeak = false, 
-                                      bool includeMutated = false);
+// Function: selectRandomSurvivors
+// What it does: Randomly pick survivors that match the requested status filters.
+// Input:
+//   state           - the game state (used to read the survivor list).
+//   count           - how many survivors to pick.
+//   includeHealthy  - whether to consider HEALTHY survivors.
+//   includeWeak     - whether to consider WEAK survivors.
+//   includeMutated  - whether to consider MUTATED survivors.
+// Output: A vector of indices into state.survivors. If fewer eligible survivors
+//         exist than requested, all of them are returned.
+std::vector<int> selectRandomSurvivors(const GameState& state,
+                                       int count,
+                                       bool includeHealthy = true,
+                                       bool includeWeak = false,
+                                       bool includeMutated = false);
 
 #endif // TOOLS_H

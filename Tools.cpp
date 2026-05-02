@@ -1,87 +1,75 @@
-#include "GameState.h"
-#include <string>
+// Tools.cpp
+// Implementation of the utility functions declared in Tools.h.
 
-using namespace std;
-// 主循环应在每日结束时调用checkEndings函数
-// 辅助函数：计算各种状态的幸存者数量
-static int countByStatus(const GameState& state, SurvivorStatus status) {
-    int count = 0;
-    for (const auto& survivor : state.survivors) {
-        if (survivor.status == status) {
-            count++;
-        }
-    }
-    return count;
+#include "Tools.h"
+#include "GameState.h"
+#include <cstdlib>
+#include <ctime>
+#include <vector>
+#include <algorithm>
+
+// Function: initRandom
+// What it does: Initializes the random number generator using the current time
+//               as a seed. This should be called once at the start of main()
+//               to make sure rand() produces different sequences each run.
+// Input:  None.
+// Output: None.
+void initRandom() {
+    srand(static_cast<unsigned int>(time(nullptr)));
 }
 
-// 检查游戏是否结束并设置结局
-void checkEndings(GameState& state) {
-    // 如果游戏已经结束，直接返回
-    if (state.gameEnded) {
-        return;
+// Function: checkProbability
+// What it does: Decides whether a random event with a given probability happens.
+//               It draws a random number in [0, 1) and returns true if that
+//               number is less than the supplied probability.
+// Input:  probability - a value between 0.0 and 1.0.
+// Output: true if the event triggers, false otherwise.
+bool checkProbability(double probability) {
+    if (probability <= 0.0) return false;
+    if (probability >= 1.0) return true;
+    double roll = static_cast<double>(rand()) / RAND_MAX;
+    return roll < probability;
+}
+
+// Function: selectRandomSurvivors
+// What it does: Randomly picks survivors whose status matches the requested
+//               filters. Deceased survivors are never selected. If fewer
+//               eligible survivors exist than requested, all are returned.
+// Input:
+//   state           - the game state (used to read the survivor list).
+//   count           - the number of survivors to pick.
+//   includeHealthy  - whether HEALTHY survivors are eligible.
+//   includeWeak     - whether WEAK survivors are eligible.
+//   includeMutated  - whether MUTATED survivors are eligible.
+// Output: A vector of indices into state.survivors.
+std::vector<int> selectRandomSurvivors(const GameState& state,
+                                       int count,
+                                       bool includeHealthy,
+                                       bool includeWeak,
+                                       bool includeMutated) {
+    // Step 1: collect every survivor that matches the filters.
+    std::vector<int> candidates;
+    for (int i = 0; i < (int)state.survivors.size(); i++) {
+        SurvivorStatus s = state.survivors[i].status;
+        if (includeHealthy && s == SurvivorStatus::HEALTHY) {
+            candidates.push_back(i);
+        } else if (includeWeak && s == SurvivorStatus::WEAK) {
+            candidates.push_back(i);
+        } else if (includeMutated && s == SurvivorStatus::MUTATED) {
+            candidates.push_back(i);
+        }
     }
-    
-    int healthyCount = countByStatus(state, SurvivorStatus::HEALTHY);
-    int weakCount = countByStatus(state, SurvivorStatus::WEAK);
-    int mutatedCount = countByStatus(state, SurvivorStatus::MUTATED);
-    int deceasedCount = countByStatus(state, SurvivorStatus::DECEASED);
-    
-    int livingCount = healthyCount + weakCount + mutatedCount;
-    
-    // 条件1: 全员死亡（悲剧收场）
-    if (livingCount == 0) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Tragic End: The shelter falls into dead silence. Diaries are scattered on the table; "
-            "the last page reads: 'We did our best.'";
-        return;
+
+    // Step 2: if we have fewer (or equal) candidates than requested, return all.
+    if ((int)candidates.size() <= count) {
+        return candidates;
     }
-    
-    // 只在第10天结束时判断其他结局
-    if (state.currentDay < 10) {
-        return;
+
+    // Step 3: shuffle with Fisher-Yates and keep the first `count` entries.
+    for (int i = (int)candidates.size() - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        std::swap(candidates[i], candidates[j]);
     }
-    
-    int totalResources = state.food + state.water;
-    
-    // 条件2: 秩序重建
-    if (healthyCount >= 4 && totalResources >= 10 && state.triggeredEvent6) {
-        state.gameEnded = true;
-        state.endingMessage = "Order Restored: Rescue arrives, and order is reestablished.";
-        return;
-    }
-    
-    // 条件3: 孤独幸存者
-    if (livingCount == 1 && totalResources >= 10) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Lone Survivor: Only you remain, guarding the ruins and your memories.";
-        return;
-    }
-    
-    // 条件4: 掠夺者
-    if (livingCount >= 2 && state.campRobberyCount >= 2) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Marauders: You have become the very people you once feared.";
-        return;
-    }
-    
-    // 条件5: 变异共生
-    if (mutatedCount > 0 && mutatedCount * 2 > livingCount) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Symbiotic Evolution: The voice on the radio gradually becomes clear... "
-            "but it's not speaking any human language.";
-        return;
-    }
-    
-    // 条件6: 艰难求生（默认存活结局）
-    if (livingCount > 0) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Struggle for Survival: The door finally opens, but the world before you "
-            "is unrecognizable. Survival is just another beginning.";
-        return;
-    }
+    candidates.resize(count);
+    return candidates;
 }
