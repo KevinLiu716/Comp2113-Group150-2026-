@@ -1,4 +1,4 @@
-// GameState.h
+/ GameState.h
 // Defines the global game state data structure and related enums.
 // Holds everything the game needs: survivors, resources, items, flags.
 
