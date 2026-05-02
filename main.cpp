@@ -12,6 +12,42 @@
 #include <cstdlib>
 #include <ctime>
 
+// We explicitly turn on the terminal's line-editing features so that
+// the Backspace key actually deletes a character on screen rather than
+// echoing as '^H'. Without this, some shells / PTYs (especially when
+// launched from inside VS Code, tmux, or `make run`) leave ECHOE off
+// and Backspace looks broken. We snapshot the original settings on
+// entry and restore them when the program exits, so we never leave
+// the terminal in a bad state.
+#include <termios.h>
+#include <unistd.h>
+
+static struct termios g_originalTermios;
+static bool g_termiosSaved = false;
+
+static void restoreTerminal() {
+    if (g_termiosSaved) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &g_originalTermios);
+    }
+}
+
+// Enable canonical mode + echo + erase-on-backspace. Safe to call on
+// non-tty stdin (e.g. when input is piped); in that case it just no-ops.
+static void enableTerminalLineEditing() {
+    if (!isatty(STDIN_FILENO)) return;
+    if (tcgetattr(STDIN_FILENO, &g_originalTermios) != 0) return;
+    g_termiosSaved = true;
+    std::atexit(restoreTerminal);
+
+    struct termios t = g_originalTermios;
+    // ICANON: line-by-line input (Enter terminates a line).
+    // ECHO:   echo typed characters.
+    // ECHOE:  Backspace visually erases the previous character.
+    // ECHOK:  the Kill character (Ctrl-U) erases the whole line.
+    t.c_lflag |= (ICANON | ECHO | ECHOE | ECHOK);
+    tcsetattr(STDIN_FILENO, TCSANOW, &t);
+}
+
 // Function: determineEnding
 // Purpose:  Inspect the final game state and decide which of the six
 //           endings the player reached. Sets both endingType (used by the
@@ -79,6 +115,10 @@ void determineEnding(GameState& state) {
 #define CHECK_QUIT() if (UI::isQuitRequested()) { quitMidGame = true; break; }
 
 int main() {
+    // Make sure Backspace actually erases on screen instead of echoing
+    // as '^H'. No-op on Windows and on non-interactive stdin (pipes).
+    enableTerminalLineEditing();
+
     // Seed the random number generator once at program start.
     initRandom();
 
@@ -92,7 +132,7 @@ int main() {
     if (hasSaveFile()) {
         if (ui.askContinueGame()) {
             if (UI::isQuitRequested()) {
-                // Player typed 'q' at the resume prompt — keep the save and exit.
+                // Player typed 'q' at the resume prompt - keep the save and exit.
                 ui.showQuitConfirmation(0);
                 return 0;
             }
@@ -120,7 +160,7 @@ int main() {
     if (!resumed) {
         Difficulty diff = ui.askDifficulty();
         if (UI::isQuitRequested()) {
-            // Quit during difficulty pick — nothing to save yet.
+            // Quit during difficulty pick - nothing to save yet.
             ui.showQuitConfirmation(0);
             return 0;
         }
@@ -137,7 +177,7 @@ int main() {
     // === Main game loop: at most 10 days, ends early if everyone dies ===
     while (state.currentDay <= 10 && state.countLivingSurvivors() > 0) {
 
-        // Save the state of "the start of this day" — that way, if the
+        // Save the state of "the start of this day" - that way, if the
         // player quits anywhere during the day, the next launch will
         // resume cleanly from the daily report of the same day.
         saveGame(state);
@@ -157,7 +197,7 @@ int main() {
         }
         CHECK_QUIT();
 
-        // 2. Expedition phase — player picks the destination.
+        // 2. Expedition phase - player picks the destination.
         std::vector<int> expeditionMembers;
         if (ui.askExpedition(state)) {
             CHECK_QUIT();
@@ -195,7 +235,7 @@ int main() {
         // 5. End-of-day summary
         ui.showDayEnd(state);
         // Note: even if the player typed 'q' during the End-of-Day prompt,
-        // we still treat the day as complete — they finished all actions.
+        // we still treat the day as complete - they finished all actions.
         // So we advance the day counter and save the *new* day's state
         // before honoring the quit. This way "I quit at end of day 3"
         // means "next time I start at day 4", which feels natural.
@@ -227,7 +267,7 @@ int main() {
     determineEnding(state);
     ui.showEnding(state);
 
-    // Game finished — wipe the save so the next run starts fresh.
+    // Game finished - wipe the save so the next run starts fresh.
     deleteSaveFile();
 
     return 0;
