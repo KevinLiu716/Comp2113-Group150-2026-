@@ -2,6 +2,7 @@
 #define GAMESTATE_H
 
 #include <vector>
+#include <string>
 
 // 难度等级
 enum class Difficulty { EASY, HARD };
