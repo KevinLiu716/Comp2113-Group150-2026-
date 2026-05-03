@@ -27,7 +27,7 @@ void initResources(GameState& state, Difficulty diff, int plan);
 //               determine which healthy survivors become weak based on
 //               the current difficulty mode.
 // Input: state - a reference to the GameState object.
-// Output: This function does not return a value. It modifies the state directly.
+// Output: This function does not return a value. It modifies the states directly.
 void consumeDaily(GameState& state);
 
 // Function: treat
