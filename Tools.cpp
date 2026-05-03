@@ -281,4 +281,3 @@ bool readLineWithEditing(std::string& out) {
     if (gotEof && out.empty()) return false;
     return true;
 }
-
