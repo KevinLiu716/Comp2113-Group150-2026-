@@ -1,42 +1,49 @@
-/**
- * @file EndingSystem.cpp
- * @author Jia Chengru (UID: 3036432613) - Game Logic, UI & Save/Load
- * @brief Logic for determining the game's ending based on final GameState.
- * 
- * This module implements the "Multiple Endings" feature. It evaluates 
- * survivor status, remaining resources, and specific event flags (e.g., Event 6)
- * to branch into one of 6 distinct narrative endings.
- */
+// EndingSystem.cpp
+// Logic for determining the game's ending based on the final GameState.
+// Evaluates survivor status, resources, and event flags to pick one of
+// 6 distinct narrative endings.
 
 #include "GameState.h"
 #include <string>
 
 using namespace std;
 
-/**
- * @brief Evaluates current game state to determine if an ending condition is met.
- * 
- * Note: This function should be called at the end of every day in main.cpp.
- * It checks for premature failure (Day 1-10) or victory/special conditions (Day 10).
- * 
- * @param state The global game state containing resources and survivor roster.
- */
+// Function: countByStatus
+// What it does: Counts how many survivors currently have the given status.
+//               Local helper used only inside this file.
+// Input:  state - the game state, status - the SurvivorStatus to count.
+// Output: Returns the number of survivors matching that status.
+static int countByStatus(const GameState& state, SurvivorStatus status) {
+    int count = 0;
+    for (const auto& survivor : state.survivors) {
+        if (survivor.status == status) {
+            count++;
+        }
+    }
+    return count;
+}
+
+// Function: checkEndings
+// What it does: Checks whether the game should end. Called at the end of
+//               every day in main.cpp. If all survivors are dead, triggers
+//               immediately. Otherwise waits until Day 10 to evaluate the
+//               remaining 5 endings in priority order.
+// Input:  state - the game state (survivors, resources, flags).
+// Output: No return value. Sets state.gameEnded and state.endingMessage
+//         if an ending condition is met.
 void checkEndings(GameState& state) {
     if (state.gameEnded) {
         return;
     }
     
-    // Aggregate survivor counts by health status for ending evaluation
-    int healthyCount = state.countSurvivorsByStatus(SurvivorStatus::HEALTHY);
-    int weakCount = state.countSurvivorsByStatus(SurvivorStatus::WEAK);
-    int mutatedCount = state.countSurvivorsByStatus(SurvivorStatus::MUTATED);
-    int deceasedCount = state.countSurvivorsByStatus(SurvivorStatus::DECEASED);
+    int healthyCount = countByStatus(state, SurvivorStatus::HEALTHY);
+    int weakCount = countByStatus(state, SurvivorStatus::WEAK);
+    int mutatedCount = countByStatus(state, SurvivorStatus::MUTATED);
+    int deceasedCount = countByStatus(state, SurvivorStatus::DECEASED);
     
     int livingCount = healthyCount + weakCount + mutatedCount;
     
-    
-    // Ending 1: Tragic End (All Dead)
-    // Priority: Highest. Checked every day. Triggers immediately if living count drops to 0.
+    // Ending 1: Tragic End - everyone is dead, checked every day
     if (livingCount == 0) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -45,24 +52,21 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // Standard survival endings are only evaluated at the conclusion of Day 10
+    // The rest only trigger on Day 10
     if (state.currentDay < 10) {
         return;
     }
     
-    // Calculate total critical resources for final evaluation
     int totalResources = state.food + state.water;
     
-    // Ending 2: Order Restored (Best Ending)
-    // Requires: High survival rate, sufficient resources, and decoding the Anomalous Signal.
+    // Ending 2: Order Restored - best ending, needs 4+ healthy, 10+ resources, and Event 6
     if (healthyCount >= 4 && totalResources >= 10 && state.triggeredEvent6) {
         state.gameEnded = true;
         state.endingMessage = "Order Restored: Rescue arrives, and order is reestablished.";
         return;
     }
     
-    // Ending 3: Lone Survivor
-    // Requires: Only one survivor remains but the shelter has abundant resources.
+    // Ending 3: Lone Survivor - only one person left but well-supplied
     if (livingCount == 1 && totalResources >= 10) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -70,8 +74,7 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // Ending 4: Marauders (Moral Decay)
-    // Requires: High robbery frequency from player expedition choices.
+    // Ending 4: Marauders - robbed other camps too many times
     if (livingCount >= 2 && state.campRobberyCount >= 2) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -79,8 +82,7 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // Ending 5: Symbiotic Evolution (Mutation Ending)
-    // Requires: Mutated survivors outnumber regular survivors.
+    // Ending 5: Symbiotic Evolution - mutated outnumber the rest
     if (mutatedCount > 0 && mutatedCount * 2 > livingCount) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -89,8 +91,7 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // Ending 6: Struggle for Survival (Default Ending)
-    // Triggers if Day 10 is reached but no special threshold conditions are met.
+    // Ending 6: Struggle for Survival - default if nothing else matched
     if (livingCount > 0) {
         state.gameEnded = true;
         state.endingMessage = 
