@@ -15,16 +15,20 @@
 // Input:  none (reads from std::cin).
 // Output: Returns 1 or 2 depending on the player's choice.
 int getBinaryChoice() {
-    int choice;
     while (true) {
-        if (std::cin >> choice && (choice == 1 || choice == 2)) {
-            return choice;
-        }
-        if (std::cin.eof()) {
+        std::string line;
+        if (!readLineWithEditing(line)) {
             return 1;  // Default safe option on EOF.
         }
-        std::cin.clear();
-        std::cin.ignore(10000, '\n');
+        size_t s = line.find_first_not_of(" \t");
+        size_t e = line.find_last_not_of(" \t");
+        if (s == std::string::npos) {
+            std::cout << "Please enter 1 or 2: ";
+            continue;
+        }
+        std::string trimmed = line.substr(s, e - s + 1);
+        if (trimmed == "1") return 1;
+        if (trimmed == "2") return 2;
         std::cout << "Invalid choice. Please enter 1 or 2: ";
     }
 }
