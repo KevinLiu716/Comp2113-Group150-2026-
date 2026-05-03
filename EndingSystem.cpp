@@ -1,15 +1,32 @@
+/**
+ * @file EndingSystem.cpp
+ * @author Jia Chengru (UID: 3036432613) - Game Logic, UI & Save/Load
+ * @brief Logic for determining the game's ending based on final GameState.
+ * 
+ * This module implements the "Multiple Endings" feature. It evaluates 
+ * survivor status, remaining resources, and specific event flags (e.g., Event 6)
+ * to branch into one of 6 distinct narrative endings.
+ */
+
 #include "GameState.h"
 #include <string>
 
 using namespace std;
-// use funnction checkEndings at the end of every day in main.cpp
 
-// check if game is end and set ending
+/**
+ * @brief Evaluates current game state to determine if an ending condition is met.
+ * 
+ * Note: This function should be called at the end of every day in main.cpp.
+ * It checks for premature failure (Day 1-10) or victory/special conditions (Day 10).
+ * 
+ * @param state The global game state containing resources and survivor roster.
+ */
 void checkEndings(GameState& state) {
     if (state.gameEnded) {
         return;
     }
     
+    // Aggregate survivor counts by health status for ending evaluation
     int healthyCount = state.countSurvivorsByStatus(SurvivorStatus::HEALTHY);
     int weakCount = state.countSurvivorsByStatus(SurvivorStatus::WEAK);
     int mutatedCount = state.countSurvivorsByStatus(SurvivorStatus::MUTATED);
@@ -18,7 +35,8 @@ void checkEndings(GameState& state) {
     int livingCount = healthyCount + weakCount + mutatedCount;
     
     
-    // ending1: all dead - check every day
+    // Ending 1: Tragic End (All Dead)
+    // Priority: Highest. Checked every day. Triggers immediately if living count drops to 0.
     if (livingCount == 0) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -27,21 +45,24 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // check other endings at the end of day 10
+    // Standard survival endings are only evaluated at the conclusion of Day 10
     if (state.currentDay < 10) {
         return;
     }
     
+    // Calculate total critical resources for final evaluation
     int totalResources = state.food + state.water;
     
-    // ending2: Order Restored
+    // Ending 2: Order Restored (Best Ending)
+    // Requires: High survival rate, sufficient resources, and decoding the Anomalous Signal.
     if (healthyCount >= 4 && totalResources >= 10 && state.triggeredEvent6) {
         state.gameEnded = true;
         state.endingMessage = "Order Restored: Rescue arrives, and order is reestablished.";
         return;
     }
     
-    // ending 3: 1 alive
+    // Ending 3: Lone Survivor
+    // Requires: Only one survivor remains but the shelter has abundant resources.
     if (livingCount == 1 && totalResources >= 10) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -49,7 +70,8 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // ending4: Marauders
+    // Ending 4: Marauders (Moral Decay)
+    // Requires: High robbery frequency from player expedition choices.
     if (livingCount >= 2 && state.campRobberyCount >= 2) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -57,7 +79,8 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // ending 5: mutated
+    // Ending 5: Symbiotic Evolution (Mutation Ending)
+    // Requires: Mutated survivors outnumber regular survivors.
     if (mutatedCount > 0 && mutatedCount * 2 > livingCount) {
         state.gameEnded = true;
         state.endingMessage = 
@@ -66,7 +89,8 @@ void checkEndings(GameState& state) {
         return;
     }
     
-    // ending 6: ending by default
+    // Ending 6: Struggle for Survival (Default Ending)
+    // Triggers if Day 10 is reached but no special threshold conditions are met.
     if (livingCount > 0) {
         state.gameEnded = true;
         state.endingMessage = 
