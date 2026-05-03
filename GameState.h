@@ -11,40 +11,40 @@
 // Difficulty levels chosen at game start.
 enum class Difficulty { EASY, HARD };
 
-// Possible status of an individual survivor.[cite: 5]
+// Possible status of an individual survivor.
 enum class SurvivorStatus { HEALTHY, WEAK, MUTATED, DECEASED };
 
 // Personality / role traits for survivors. Each trait gives one passive
 // effect that influences certain events. Three are currently active in
-// the game logic; the others are placeholders for future expansion.[cite: 5]
+// the game logic; the others are placeholders for future expansion.
 enum class SurvivorTrait {
     NONE,
-    DOCTOR,    // Treatment does not consume medicine when this survivor is alive[cite: 5]
-    FRAIL,     // +20% chance to become weak from supply shortage[cite: 5]
-    SCOUT,     // +1 to expedition resource gain when participating[cite: 5]
-    ENGINEER,  // (placeholder) reduces extra costs on expeditions[cite: 5]
-    SOLDIER,   // (placeholder) protects from random death on robbery[cite: 5]
-    LUCKY      // (placeholder) reduces mutation chance from dreams[cite: 5]
+    DOCTOR,    // Treatment does not consume medicine when this survivor is alive
+    FRAIL,     // +20% chance to become weak from supply shortage
+    SCOUT,     // +1 to expedition resource gain when participating
+    ENGINEER,  // (placeholder) reduces extra costs on expeditions
+    SOLDIER,   // (placeholder) protects from random death on robbery
+    LUCKY      // (placeholder) reduces mutation chance from dreams
 };
 
 // One of the six possible endings. Set at game over by determineEnding(),
-// and used by the UI to show a matching banner and color.[cite: 5]
+// and used by the UI to show a matching banner and color.
 enum class EndingType {
-    NONE,                  // Game still in progress[cite: 5]
-    TRAGIC_END,            // Everyone died[cite: 5]
-    ORDER_RESTORED,        // Rescue arrived (best ending)[cite: 5]
-    LONE_SURVIVOR,         // Only one person survived[cite: 5]
-    SYMBIOTIC_EVOLUTION,   // Mutated outnumber the living[cite: 5]
-    MARAUDERS,             // Survived by robbing other camps[cite: 5]
-    STRUGGLE_FOR_SURVIVAL  // Default survival ending[cite: 5]
+    NONE,                  // Game still in progress
+    TRAGIC_END,            // Everyone died
+    ORDER_RESTORED,        // Rescue arrived (best ending)
+    LONE_SURVIVOR,         // Only one person survived
+    SYMBIOTIC_EVOLUTION,   // Mutated outnumber the living
+    MARAUDERS,             // Survived by robbing other camps
+    STRUGGLE_FOR_SURVIVAL  // Default survival ending
 };
 
-// A single survivor in the shelter.[cite: 5]
+// A single survivor in the shelter.
 struct Survivor {
-    SurvivorStatus status;   // Current health status[cite: 5]
-    int daysWeak;            // Days spent in the WEAK state[cite: 5]
-    std::string name;        // Display name (e.g. "Alice")[cite: 5]
-    SurvivorTrait trait;     // Passive ability[cite: 5]
+    SurvivorStatus status;   // Current health status
+    int daysWeak;            // Days spent in the WEAK state
+    std::string name;        // Display name (e.g. "Alice")
+    SurvivorTrait trait;     // Passive ability
 
     Survivor()
         : status(SurvivorStatus::HEALTHY), daysWeak(0),
@@ -55,36 +55,36 @@ struct Survivor {
           name(""), trait(SurvivorTrait::NONE) {}
 };
 
-// Holds the entire game state. Passed by reference to almost every function.[cite: 5]
+// Holds the entire game state. Passed by reference to almost every function.
 class GameState {
 public:
-    // Core state[cite: 5]
+    // Core state
     Difficulty difficulty;
     int currentDay;
 
-    // The 6 shelter survivors[cite: 5]
+    // The 6 shelter survivors
     std::vector<Survivor> survivors;
 
-    // Main resources[cite: 5]
+    // Main resources
     int food;
     int water;
     int medicine;
 
-    // Special items / flags[cite: 5]
+    // Special items / flags
     bool hasRadio;
     bool hasNote;
     bool usedNoteEffect;
 
-    // Temporary daily state (reset each day)[cite: 5]
+    // Temporary daily state (reset each day)
     std::vector<int> expeditionMemberIds;
     bool wasTreatedToday;
 
-    // Event and ending tracking flags[cite: 5]
+    // Event and ending tracking flags
     bool triggeredEvent6;
     int campRobberyCount;
     bool forceEvent5NextDay;
 
-    // Ending state[cite: 5]
+    // Ending state
     bool gameEnded;
     std::string endingMessage;
     EndingType endingType;
