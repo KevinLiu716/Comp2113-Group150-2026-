@@ -40,4 +40,9 @@ bool loadGame(GameState& state);
 // Delete the save file.
 void deleteSaveFile();
 
+// Read one line of input from the terminal with our own line editing
+// (so Backspace and DEL always work, regardless of stty settings).
+// Returns true on success, false on EOF.
+bool readLineWithEditing(std::string& out);
+
 #endif
