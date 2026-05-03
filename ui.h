@@ -13,7 +13,12 @@
 class UI {
 public:
     // -------- Constructor --------
-    UI(); // 新增：构造函数，用于初始化终端输入环境
+    /**
+     * @brief Constructor for the UI class.
+     * Initializes the terminal environment and configures tty settings 
+     * (e.g., mapping backspace key) for stable user interaction.
+     */
+    UI(); 
 
     // -------- Start and end screens --------
     void showStartMenu();
