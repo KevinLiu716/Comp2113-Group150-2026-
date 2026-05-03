@@ -1,6 +1,5 @@
 // Tools.cpp
-// Implementation of the utility functions declared in Tools.h:
-// random helpers, survivor selection, and save/load file operations.
+// Implementation of the utility functions declared in Tools.h.
 
 #include "Tools.h"
 #include "GameState.h"
@@ -12,6 +11,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <iostream>
+#include <termios.h>
+#include <unistd.h>
 
 // The default filename for save data.
 const std::string SAVE_FILE_NAME = "shelter_save.txt";
@@ -20,8 +22,8 @@ const std::string SAVE_FILE_NAME = "shelter_save.txt";
 // What it does: Initializes the random number generator using the current time
 //               as a seed. This should be called once at the start of main()
 //               to make sure rand() produces different sequences each run.
-// Input:  none.
-// Output: none.
+// Input:  None.
+// Output: None.
 void initRandom() {
     srand(static_cast<unsigned int>(time(nullptr)));
 }
@@ -43,17 +45,19 @@ bool checkProbability(double probability) {
 // What it does: Randomly picks survivors whose status matches the requested
 //               filters. Deceased survivors are never selected. If fewer
 //               eligible survivors exist than requested, all are returned.
-// Input:  state - the game state (to read the survivor list),
-//         count - the number of survivors to pick,
-//         includeHealthy / includeWeak / includeMutated - which statuses
-//         are eligible for selection.
+// Input:
+//   state           - the game state (used to read the survivor list).
+//   count           - the number of survivors to pick.
+//   includeHealthy  - whether HEALTHY survivors are eligible.
+//   includeWeak     - whether WEAK survivors are eligible.
+//   includeMutated  - whether MUTATED survivors are eligible.
 // Output: A vector of indices into state.survivors.
 std::vector<int> selectRandomSurvivors(const GameState& state,
                                        int count,
                                        bool includeHealthy,
                                        bool includeWeak,
                                        bool includeMutated) {
-    // Collect every survivor that matches the filters.
+    // Step 1: collect every survivor that matches the filters.
     std::vector<int> candidates;
     for (int i = 0; i < (int)state.survivors.size(); i++) {
         SurvivorStatus s = state.survivors[i].status;
@@ -66,12 +70,12 @@ std::vector<int> selectRandomSurvivors(const GameState& state,
         }
     }
 
-    // If we have fewer (or equal) candidates than requested, return all.
+    // Step 2: if we have fewer (or equal) candidates than requested, return all.
     if ((int)candidates.size() <= count) {
         return candidates;
     }
 
-    // Shuffle with Fisher-Yates and keep the first `count` entries.
+    // Step 3: shuffle with Fisher-Yates and keep the first `count` entries.
     for (int i = (int)candidates.size() - 1; i > 0; i--) {
         int j = rand() % (i + 1);
         std::swap(candidates[i], candidates[j]);
@@ -80,40 +84,44 @@ std::vector<int> selectRandomSurvivors(const GameState& state,
     return candidates;
 }
 
-// ---- Save / Load ----
+// ===========================================================================
+// Save / load
+//
 // Save format is a simple line-based text file. Each piece of state is
-// written on its own line so the file is human-readable and easy to debug.
+// written on its own line. This format is human-readable so it is easy to
+// debug and easy to demonstrate the File I/O coding requirement.
+// ===========================================================================
 
 // Function: hasSaveFile
-// What it does: Checks whether a save file exists by trying to open it.
-// Input:  none.
-// Output: true if the file can be opened, false otherwise.
+// What it does: Check whether a save file exists in the current directory by
+//               attempting to open it for reading.
+// Input:  None.
+// Output: true if the save file can be opened, false otherwise.
 bool hasSaveFile() {
     std::ifstream f(SAVE_FILE_NAME);
     return f.good();
 }
 
 // Function: deleteSaveFile
-// What it does: Removes the save file from disk. Called when a game ends
-//               so the next run starts fresh.
-// Input:  none.
-// Output: none.
+// What it does: Remove the save file from disk. Used after a game finishes so
+//               the next run starts fresh.
+// Input:  None.
+// Output: None.
 void deleteSaveFile() {
     std::remove(SAVE_FILE_NAME.c_str());
 }
 
 // Function: saveGame
-// What it does: Writes the entire GameState to disk as a line-based text file.
-//               One line per field in a fixed order. Survivors are written as
-//               a count line followed by 4 lines per survivor (name, status,
-//               daysWeak, trait).
+// What it does: Write the entire GameState to disk as a line-based text file.
+//               One line per field, in a fixed order. Survivors are written
+//               in a block: a count line followed by 4 lines per survivor.
 // Input:  state - the GameState to save (read-only reference).
 // Output: true on success, false on file error.
 bool saveGame(const GameState& state) {
     std::ofstream out(SAVE_FILE_NAME);
     if (!out.is_open()) return false;
 
-    // Header so a malformed file can be detected on load.
+    // Header / version marker so a malformed file can be detected.
     out << "SHELTER_SAVE_V1\n";
 
     // Core scalar state.
@@ -147,9 +155,10 @@ bool saveGame(const GameState& state) {
 }
 
 // Function: loadGame
-// What it does: Reads a previously saved GameState from disk. The format must
-//               match what saveGame() writes. Returns false on any error
-//               (missing file, wrong header, parse failure).
+// What it does: Read a previously saved GameState from disk. The format must
+//               match what saveGame() writes. On any failure (missing file,
+//               bad header, parse error) the function returns false and
+//               leaves `state` in an undefined partial state.
 // Input:  state - the GameState to populate (will be overwritten).
 // Output: true on success, false on any error.
 bool loadGame(GameState& state) {
@@ -198,7 +207,8 @@ bool loadGame(GameState& state) {
         state.survivors.push_back(s);
     }
 
-    // Reset transient daily state that is not saved.
+    // Reset transient daily state - these are not saved and should always
+    // start cleanly when resuming.
     state.expeditionMemberIds.clear();
     state.wasTreatedToday = false;
     state.gameEnded = false;
@@ -208,3 +218,67 @@ bool loadGame(GameState& state) {
     in.close();
     return !in.bad();
 }
+
+// Read one line from stdin with manual line editing. Echo and backspace
+// handling are done by us, so this works the same regardless of the
+// terminal's stty / termios settings (Mac terminal, SSH to a Linux box,
+// VS Code's integrated terminal, etc. all behave identically).
+//
+// On non-tty stdin (e.g. piped input), falls back to std::getline.
+bool readLineWithEditing(std::string& out) {
+    out.clear();
+
+    // Make sure any pending prompt text is on screen before we start
+    // reading. We bypass iostream once we go to raw mode, so cout's
+    // tie-to-cin auto-flush no longer kicks in for us.
+    std::cout.flush();
+
+    if (!isatty(STDIN_FILENO)) {
+        if (std::getline(std::cin, out)) return true;
+        return false;
+    }
+
+    struct termios oldT;
+    if (tcgetattr(STDIN_FILENO, &oldT) != 0) {
+        if (std::getline(std::cin, out)) return true;
+        return false;
+    }
+
+    struct termios rawT = oldT;
+    rawT.c_lflag &= ~(ICANON | ECHO);
+    rawT.c_cc[VMIN]  = 1;
+    rawT.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSANOW, &rawT);
+
+    bool gotEof = false;
+    while (true) {
+        unsigned char ch;
+        ssize_t n = read(STDIN_FILENO, &ch, 1);
+        if (n <= 0) { gotEof = true; break; }
+
+        if (ch == '\n' || ch == '\r') {
+            std::cout << '\n' << std::flush;
+            break;
+        }
+        if (ch == 8 || ch == 127) {
+            // Backspace or DEL: erase one character if any.
+            if (!out.empty()) {
+                out.pop_back();
+                std::cout << "\b \b" << std::flush;
+            }
+            continue;
+        }
+        if (ch < 32) {
+            // Other control characters: ignore.
+            continue;
+        }
+        out.push_back((char)ch);
+        std::cout << (char)ch << std::flush;
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldT);
+
+    if (gotEof && out.empty()) return false;
+    return true;
+}
+
