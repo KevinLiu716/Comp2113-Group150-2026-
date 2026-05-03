@@ -1,22 +1,30 @@
-// ui.cpp
-// Implementation of the UI class. Renders all screens and handles input.
-// Uses ANSI escape codes for color and pure ASCII characters for borders
-// and icons. Output is plain 7-bit ASCII; works in any terminal,
-// including Linux consoles with no UTF-8 support.
-
 #include "ui.h"
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <cstdlib> // ADDED: Required for system() call to modify tty behavior
+
+using namespace std;
+
+// ============================================================
+// Constructor: Terminal Environment Initialization
+//
+// Addresses a common issue in Linux/Unix SSH environments (like
+// the academy server) where the Backspace key maps to ASCII 8 (^H)
+// instead of the default terminal erase character (ASCII 127).
+// This mapping prevents raw ^H characters from cluttering the CLI.
+//
+// The command '2>/dev/null' ensures the program does not crash or
+// print errors when executed in non-Linux environments (e.g., Windows).
+// ============================================================
+UI::UI() {
+    system("stty erase ^H 2>/dev/null"); 
+}
 
 // ============================================================
 // Quit flag
 //
 // When the player types 'q' or 'Q' at any input prompt, this flag is
-// raised and every subsequent input function returns a safe default
-// without blocking. The main loop polls UI::isQuitRequested() after
-// each UI call to break out cleanly and save the game.
-// ============================================================
 static bool g_quitRequested = false;
 
 bool UI::isQuitRequested() { return g_quitRequested; }
