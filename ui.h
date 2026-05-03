@@ -12,13 +12,6 @@
 
 class UI {
 public:
-    // Function: UI (constructor)
-    // What it does: Sets up the terminal environment and configures tty
-    //               settings (e.g. backspace key mapping) for stable input.
-    // Input:  none.
-    // Output: A ready-to-use UI object.
-    UI(); 
-
     // -------- Start and end screens --------
 
     // Shows the main menu / title screen.
