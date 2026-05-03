@@ -1,4 +1,4 @@
-++// player.cpp
+// player.cpp
 // Now also assigns survivor names and traits at construction.
 
 #include "GameState.h"
