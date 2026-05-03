@@ -1,3 +1,7 @@
+// Expedition.cpp
+// Handles all expedition event logic: destination handlers, player choices,
+// resource gains/losses, and trait-based bonuses during expeditions.
+
 #include "EventSystem.h"
 #include "Tools.h"
 #include <string>
@@ -5,7 +9,11 @@
 #include <cstdlib>
 #include <ctime>
 
-// Note: getBinaryChoice() is only used in this file.
+// Function: getBinaryChoice
+// What it does: Reads input from the player until they enter 1 or 2.
+//               Keeps re-prompting on invalid input. Returns 1 on EOF.
+// Input:  none (reads from std::cin).
+// Output: Returns 1 or 2 depending on the player's choice.
 int getBinaryChoice() {
     int choice;
     while (true) {
@@ -21,12 +29,22 @@ int getBinaryChoice() {
     }
 }
 
-// Helper: pick a variant string at random.
+// Function: pickExpVariant
+// What it does: Picks one string at random from the given array of variants.
+//               Used to add text variety to expedition openings.
+// Input:  variants - array of strings, n - number of elements in the array.
+// Output: Returns one randomly chosen string.
 static std::string pickExpVariant(const std::string variants[], int n) {
     return variants[rand() % n];
 }
 
-// Helper: returns true if any expedition member has the given trait.
+// Function: partyHasTrait
+// What it does: Checks whether any member of the expedition party has a
+//               specific survivor trait (e.g. SCOUT, DOCTOR).
+// Input:  state - the game state (to access survivor data),
+//         memberIndices - indices of survivors on the expedition,
+//         trait - the SurvivorTrait to look for.
+// Output: Returns true if at least one expedition member has the trait.
 static bool partyHasTrait(const GameState& state,
                           const std::vector<int>& memberIndices,
                           SurvivorTrait trait) {
@@ -39,9 +57,13 @@ static bool partyHasTrait(const GameState& state,
     return false;
 }
 
-// Main dispatcher. Note that the destination is now chosen by the player
-// via the UI (see ui.cpp::askExpeditionDestination), not by
-// selectRandomExpeditionEvent below.
+// Function: processExpeditionEvent
+// What it does: Main dispatcher that routes to the correct handler based on
+//               the expedition event type. For OTHER_CAMP and PERIMETER_CLEAR,
+//               it also prompts the player for a sub-choice before dispatching.
+// Input:  state - game state, eventType - which expedition location,
+//         memberIndices - who went on the expedition, choice - unused legacy param.
+// Output: Returns a narrative string describing what happened.
 std::string processExpeditionEvent(
     GameState& state,
     ExpeditionEventType eventType,
@@ -86,7 +108,12 @@ std::string processExpeditionEvent(
     }
 }
 
-// Kept for compatibility but no longer called from main.
+// Function: selectRandomExpeditionEvent
+// What it does: Picks a random expedition event type (1-6). If the player
+//               has a note and hasn't used it yet, forces HIDDEN_STORAGE.
+//               Kept for compatibility but no longer called from main.
+// Input:  state - game state (checks hasNote and usedNoteEffect).
+// Output: Returns one ExpeditionEventType.
 ExpeditionEventType selectRandomExpeditionEvent(GameState& state) {
     if (state.hasNote && !state.usedNoteEffect) {
         state.usedNoteEffect = true;
@@ -104,6 +131,12 @@ ExpeditionEventType selectRandomExpeditionEvent(GameState& state) {
     }
 }
 
+// Function: handleSupermarket
+// What it does: Expedition to a supermarket. Gains food (4 easy / 3 hard),
+//               +1 if a SCOUT is in the party. Costs some water based on
+//               expedition size.
+// Input:  state - game state, memberIndices - who went on this expedition.
+// Output: Returns a narrative string. Modifies state.food and state.water.
 std::string handleSupermarket(GameState& state, const std::vector<int>& memberIndices) {
     static const std::string openings[3] = {
         "Passing by a Supermarket: Shelves overturned, glass underfoot.\nA few cans roll out from the rubble.\n",
@@ -134,6 +167,11 @@ std::string handleSupermarket(GameState& state, const std::vector<int>& memberIn
     return result;
 }
 
+// Function: handleWaterPlant
+// What it does: Expedition to a water plant. Gains water (6 easy / 4 hard),
+//               +1 if SCOUT is present. Costs some food based on party size.
+// Input:  state - game state, memberIndices - expedition members.
+// Output: Returns a narrative string. Modifies state.water and state.food.
 std::string handleWaterPlant(GameState& state, const std::vector<int>& memberIndices) {
     static const std::string openings[3] = {
         "Water Plant: The pumps are dead, but a sealed reservoir glints below.\n",
@@ -164,6 +202,11 @@ std::string handleWaterPlant(GameState& state, const std::vector<int>& memberInd
     return result;
 }
 
+// Function: handlePharmacy
+// What it does: Expedition to a pharmacy. Gains 2 medicine (+1 if SCOUT).
+//               Costs food and water equal to the expedition size.
+// Input:  state - game state, memberIndices - expedition members.
+// Output: Returns a narrative string. Modifies state.medicine, food, water.
 std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndices) {
     static const std::string openings[3] = {
         "Pharmacy: Glass crunches under your feet. A few intact bottles remain.\n",
@@ -206,6 +249,14 @@ std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndic
     return result;
 }
 
+// Function: handleOtherCamp
+// What it does: Encounter with another survivor camp. Two options:
+//               REQUEST_HELP - chance to get 1 food + 2 water (70% easy, 40% hard).
+//               ROB - always get 4 food + 4 water, but a random member may die
+//               (50% easy, 100% hard). Increments campRobberyCount on rob.
+// Input:  state - game state, memberIndices - expedition members,
+//         option - REQUEST_HELP or ROB.
+// Output: Returns a narrative string. May modify food, water, survivor status.
 std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option) {
     std::string result = "";
 
@@ -260,6 +311,14 @@ std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndi
     return result;
 }
 
+// Function: handlePerimeterClear
+// What it does: Search the area around the shelter. Two sub-options:
+//               OUTER_CLEAR - safer, gains small food or water (50/50 chance),
+//               +1 if SCOUT. INNER_SEARCH - riskier, sets hasNote = true so
+//               the next expedition can trigger HIDDEN_STORAGE.
+// Input:  state - game state, memberIndices - expedition members,
+//         option - OUTER_CLEAR or INNER_SEARCH.
+// Output: Returns a narrative string. Modifies food/water or hasNote flag.
 std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option) {
     std::string result = "";
 
@@ -300,6 +359,12 @@ std::string handlePerimeterClear(GameState& state, const std::vector<int>& membe
     return result;
 }
 
+// Function: handleLaboratory
+// What it does: Expedition to an abandoned lab. Dangerous location:
+//               Easy mode - ALL expedition members who are HEALTHY become MUTATED.
+//               Hard mode - one random member becomes MUTATED (if HEALTHY).
+// Input:  state - game state, memberIndices - expedition members.
+// Output: Returns a narrative string. May change survivor status to MUTATED.
 std::string handleLaboratory(GameState& state, const std::vector<int>& memberIndices) {
     static const std::string openings[3] = {
         "Laboratory: The doors hiss open with stale, glowing air.\n",
@@ -332,6 +397,11 @@ std::string handleLaboratory(GameState& state, const std::vector<int>& memberInd
     return result;
 }
 
+// Function: handleHiddenStorage
+// What it does: Special expedition triggered by having a note (from INNER_SEARCH).
+//               Always gains 3 food and 3 water with no cost or risk.
+// Input:  state - game state, memberIndices - expedition members (unused here).
+// Output: Returns a narrative string. Adds 3 food and 3 water to state.
 std::string handleHiddenStorage(GameState& state, const std::vector<int>& memberIndices) {
     static const std::string openings[3] = {
         "Hidden Storage: The note's markings lead to a buried hatch.\n",
