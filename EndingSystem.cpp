@@ -38,7 +38,6 @@ void checkEndings(GameState& state) {
     int healthyCount = countByStatus(state, SurvivorStatus::HEALTHY);
     int weakCount = countByStatus(state, SurvivorStatus::WEAK);
     int mutatedCount = countByStatus(state, SurvivorStatus::MUTATED);
-    int deceasedCount = countByStatus(state, SurvivorStatus::DECEASED);
     
     int livingCount = healthyCount + weakCount + mutatedCount;
     
