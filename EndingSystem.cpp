@@ -1,7 +1,6 @@
 // EndingSystem.cpp
-// Logic for determining the game's ending based on the final GameState.
-// Evaluates survivor status, resources, and event flags to pick one of
-// 6 distinct narrative endings.
+// Decides which of the 6 endings the player got, based on the final
+// GameState.
 
 #include "GameState.h"
 #include <string>
