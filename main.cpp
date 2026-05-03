@@ -9,41 +9,6 @@
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
-#include <termios.h>
-#include <unistd.h>
-
-// Saved original terminal settings so we can restore them on exit.
-static struct termios g_originalTermios;
-static bool g_termiosSaved = false;
-
-// Function: restoreTerminal
-// What it does: Restores the terminal to its original settings when the
-//               program exits. Registered via std::atexit().
-// Input:  none.
-// Output: none.
-static void restoreTerminal() {
-    if (g_termiosSaved) {
-        tcsetattr(STDIN_FILENO, TCSANOW, &g_originalTermios);
-    }
-}
-
-// Function: enableTerminalLineEditing
-// What it does: Forces the terminal into canonical mode with echo so that
-//               backspace works properly (some shells turn off ECHOE).
-//               Saves the old settings and registers restoreTerminal() to
-//               put them back on exit.
-// Input:  none.
-// Output: none.
-static void enableTerminalLineEditing() {
-    if (!isatty(STDIN_FILENO)) return;
-    if (tcgetattr(STDIN_FILENO, &g_originalTermios) != 0) return;
-    g_termiosSaved = true;
-    std::atexit(restoreTerminal);
-
-    struct termios t = g_originalTermios;
-    t.c_lflag |= (ICANON | ECHO | ECHOE | ECHOK);
-    tcsetattr(STDIN_FILENO, TCSANOW, &t);
-}
 
 // Function: determineEnding
 // What it does: Looks at the final game state after Day 10 (or after all
@@ -111,7 +76,6 @@ void determineEnding(GameState& state) {
 // Input:  none.
 // Output: Returns 0 on normal exit.
 int main() {
-    enableTerminalLineEditing();
     initRandom();
 
     UI ui;
