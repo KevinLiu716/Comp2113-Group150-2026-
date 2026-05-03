@@ -1,12 +1,6 @@
-/**
- * @file EventSystem.h
- * @author WU Bozhou (UID: 3036588955) - Game design & Event System
- * @brief Declarations for the daily (night) and expedition event systems.
- * 
- * This header defines the core enumeration types and function signatures 
- * required for processing random events, handling state flags (e.g., forceEvent5NextDay),
- * and managing survivor expeditions.
- */
+// EventSystem.h
+// Declarations for the daily (night) and expedition event systems.
+// Defines event type enums, option enums, and all handler function signatures.
 
 #ifndef EVENTSYSTEM_H
 #define EVENTSYSTEM_H
@@ -16,10 +10,7 @@
 #include <string>
 #include <vector>
 
-/**
- * @enum DailyEventType
- * @brief Categorization of nocturnal random events affecting the shelter.
- */
+// The 6 types of random events that can happen at night in the shelter.
 enum class DailyEventType {
     RADIATION_RAIN,    
     INTERNAL_CONFLICT, 
@@ -29,42 +20,61 @@ enum class DailyEventType {
     ANOMALOUS_SIGNAL   
 };
 
-/**
- * @brief Main dispatcher for daily night events.
- */
+// Function: processDailyEvent
+// What it does: Main dispatcher for nightly events. Routes to the correct
+//               handler based on eventType.
+// Input:  state - the game state, eventType - which night event to process.
+// Output: Returns a narrative string describing what happened.
 std::string processDailyEvent(GameState& state, DailyEventType eventType);
 
-/**
- * @brief Randomly selects the next daily event.
- * @note Considers the state.forceEvent5NextDay flag. If true, forces UNEXPECTED_VISITOR.
- */
+// Function: selectRandomDailyEvent
+// What it does: Picks a random nightly event. If forceEvent5NextDay is set,
+//               forces UNEXPECTED_VISITOR instead of rolling randomly.
+// Input:  state - game state (checks forceEvent5NextDay flag).
+// Output: Returns one DailyEventType.
 DailyEventType selectRandomDailyEvent(GameState& state);
 
+// Function: handleRadiationRain
+// What it does: Handles the radiation rain event. Some survivors may get sick.
+// Input:  state - game state.
+// Output: Returns a description of what happened.
 std::string handleRadiationRain(GameState& state);
 
-/**
- * @brief Handles internal conflicts among survivors.
- * @note May set flag state.forceEvent5NextDay to true if no radio is present.
- */
+// Function: handleInternalConflict
+// What it does: Handles fights among survivors. May set forceEvent5NextDay
+//               flag if no radio is present.
+// Input:  state - game state.
+// Output: Returns a description of the conflict.
 std::string handleInternalConflict(GameState& state);
 
+// Function: handleMysteriousDream
+// What it does: A survivor has a strange dream. May cause mutation.
+// Input:  state - game state.
+// Output: Returns a description of the dream event.
 std::string handleMysteriousDream(GameState& state);
 
+// Function: handleSpoiledSupplies
+// What it does: Some stored food or water goes bad overnight.
+// Input:  state - game state.
+// Output: Returns a description of spoilage.
 std::string handleSpoiledSupplies(GameState& state);
 
-std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor);  
+// Function: handleUnexpectedVisitor
+// What it does: A stranger knocks on the shelter door. The player decides
+//               whether to open (choice = true) or ignore (choice = false).
+// Input:  state - game state, choice - true means open the door.
+// Output: Returns a description of the outcome.
+std::string handleUnexpectedVisitor(GameState& state, bool choice);  
 
-/**
- * @brief Handles the anomalous radio signal event.
- * @note May set flag state.forceEvent5NextDay to true if unresolved.
- */
+// Function: handleAnomalousSignal
+// What it does: A strange radio signal is detected. May set
+//               forceEvent5NextDay flag if the signal is unresolved.
+// Input:  state - game state.
+// Output: Returns a description of the signal event.
 std::string handleAnomalousSignal(GameState& state);
 
 
-/**
- * @enum ExpeditionEventType
- * @brief Categorization of external locations available for daytime expeditions.
- */
+// The 7 possible expedition destinations the player can visit during the day.
 enum class ExpeditionEventType {
     SUPERMARKET,
     WATER_PLANT,
@@ -75,31 +85,25 @@ enum class ExpeditionEventType {
     HIDDEN_STORAGE
 };
 
-/**
- * @enum CampOption
- * @brief Interaction choices when encountering another survivor camp.
- */
+// Player choices when encountering another survivor camp.
 enum class CampOption {
     REQUEST_HELP,
     ROB
 };
 
-/**
- * @enum ClearOption
- * @brief Strategic choices during perimeter clearing operations.
- */
+// Player choices when clearing the perimeter around the shelter.
 enum class ClearOption {
     OUTER_CLEAR,
     INNER_SEARCH
 };
 
-/**
- * @brief Main dispatcher for daytime expedition events.
- * @param state The global game state.
- * @param eventType The selected location/event type.
- * @param memberIndices The indices of survivors participating in the expedition.
- * @param choice Optional parameter for specific event branches (defaults to -1).
- */
+// Function: processExpeditionEvent
+// What it does: Main dispatcher for daytime expeditions. Routes to the
+//               correct handler based on eventType.
+// Input:  state - game state, eventType - which location to visit,
+//         memberIndices - indices of survivors who went out,
+//         choice - optional sub-choice for branching events (default -1).
+// Output: Returns a narrative string describing the expedition result.
 std::string processExpeditionEvent(
     GameState& state, 
     ExpeditionEventType eventType,
@@ -107,25 +111,23 @@ std::string processExpeditionEvent(
     int choice = -1
 );
 
-/**
- * @brief Randomly selects a daytime expedition destination/event.
- * @return ExpeditionEventType Evaluates state flags like hasNote/usedNoteEffect.
- */
+// Function: selectRandomExpeditionEvent
+// What it does: Picks a random expedition destination. If hasNote is set
+//               and usedNoteEffect is false, forces HIDDEN_STORAGE.
+// Input:  state - game state (checks hasNote and usedNoteEffect flags).
+// Output: Returns one ExpeditionEventType.
 ExpeditionEventType selectRandomExpeditionEvent(GameState& state);
 
-// Standard Expedition Handlers
+// Standard expedition handlers (no sub-choice needed)
 std::string handleSupermarket(GameState& state, const std::vector<int>& memberIndices);
 std::string handleWaterPlant(GameState& state, const std::vector<int>& memberIndices);
 std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndices);
 std::string handleLaboratory(GameState& state, const std::vector<int>& memberIndices);
 
-/**
- * @brief Handles the hidden storage event.
- * @note Sets the usedNoteEffect flag upon completion.
- */
+// Triggers when the player found a note earlier. Sets usedNoteEffect flag.
 std::string handleHiddenStorage(GameState& state, const std::vector<int>& memberIndices);
 
-// Branching Expedition Handlers (Requires player options)
+// Branching expedition handlers (player picks a sub-option)
 std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option);
 std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option);
 
