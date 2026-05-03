@@ -1,100 +1,134 @@
-// EndingSystem.cpp
-// Decides which of the 6 endings the player got, based on the final
-// GameState.
+// EventSystem.h
+// Declarations for the daily (night) and expedition event systems.
+// Defines event type enums, option enums, and all handler function signatures.
 
+#ifndef EVENTSYSTEM_H
+#define EVENTSYSTEM_H
+
+#include "Tools.h"
 #include "GameState.h"
 #include <string>
+#include <vector>
 
-using namespace std;
+// The 6 types of random events that can happen at night in the shelter.
+enum class DailyEventType {
+    RADIATION_RAIN,    
+    INTERNAL_CONFLICT, 
+    MYSTERIOUS_DREAM,
+    SPOILED_SUPPLIES,
+    UNEXPECTED_VISITOR,
+    ANOMALOUS_SIGNAL   
+};
 
-// Function: countByStatus
-// What it does: Counts how many survivors currently have the given status.
-//               Local helper used only inside this file.
-// Input:  state - the game state, status - the SurvivorStatus to count.
-// Output: Returns the number of survivors matching that status.
-static int countByStatus(const GameState& state, SurvivorStatus status) {
-    int count = 0;
-    for (const auto& survivor : state.survivors) {
-        if (survivor.status == status) {
-            count++;
-        }
-    }
-    return count;
-}
+// Function: processDailyEvent
+// What it does: Main dispatcher for nightly events. Routes to the correct
+//               handler based on eventType.
+// Input:  state - the game state, eventType - which night event to process.
+// Output: Returns a narrative string describing what happened.
+std::string processDailyEvent(GameState& state, DailyEventType eventType);
 
-// Function: checkEndings
-// What it does: Checks whether the game should end. Called at the end of
-//               every day in main.cpp. If all survivors are dead, triggers
-//               immediately. Otherwise waits until Day 10 to evaluate the
-//               remaining 5 endings in priority order.
-// Input:  state - the game state (survivors, resources, flags).
-// Output: No return value. Sets state.gameEnded and state.endingMessage
-//         if an ending condition is met.
-void checkEndings(GameState& state) {
-    if (state.gameEnded) {
-        return;
-    }
-    
-    int healthyCount = countByStatus(state, SurvivorStatus::HEALTHY);
-    int weakCount = countByStatus(state, SurvivorStatus::WEAK);
-    int mutatedCount = countByStatus(state, SurvivorStatus::MUTATED);
-    
-    int livingCount = healthyCount + weakCount + mutatedCount;
-    
-    // Ending 1: Tragic End - everyone is dead, checked every day
-    if (livingCount == 0) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Tragic End: The shelter falls into dead silence. Diaries are scattered on the table; "
-            "the last page reads: 'We did our best.'";
-        return;
-    }
-    
-    // The rest only trigger on Day 10
-    if (state.currentDay < 10) {
-        return;
-    }
-    
-    int totalResources = state.food + state.water;
-    
-    // Ending 2: Order Restored - best ending, needs 4+ healthy, 10+ resources, and Event 6
-    if (healthyCount >= 4 && totalResources >= 10 && state.triggeredEvent6) {
-        state.gameEnded = true;
-        state.endingMessage = "Order Restored: Rescue arrives, and order is reestablished.";
-        return;
-    }
-    
-    // Ending 3: Lone Survivor - only one person left but well-supplied
-    if (livingCount == 1 && totalResources >= 10) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Lone Survivor: Only you remain, guarding the ruins and your memories.";
-        return;
-    }
-    
-    // Ending 4: Marauders - robbed other camps too many times
-    if (livingCount >= 2 && state.campRobberyCount >= 2) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Marauders: You have become the very people you once feared.";
-        return;
-    }
-    
-    // Ending 5: Symbiotic Evolution - mutated outnumber the rest
-    if (mutatedCount > 0 && mutatedCount * 2 > livingCount) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Symbiotic Evolution: The voice on the radio gradually becomes clear... "
-            "but it's not speaking any human language.";
-        return;
-    }
-    
-    // Ending 6: Struggle for Survival - default if nothing else matched
-    if (livingCount > 0) {
-        state.gameEnded = true;
-        state.endingMessage = 
-            "Struggle for Survival: The door finally opens, but the world before you "
-            "is unrecognizable. Survival is just another beginning.";
-        return;
-    }
-}
+// Function: selectRandomDailyEvent
+// What it does: Picks a random nightly event. If forceEvent5NextDay is set,
+//               forces UNEXPECTED_VISITOR instead of rolling randomly.
+// Input:  state - game state (checks forceEvent5NextDay flag).
+// Output: Returns one DailyEventType.
+DailyEventType selectRandomDailyEvent(GameState& state);
+
+// Function: handleRadiationRain
+// What it does: Handles the radiation rain event. Some survivors may get sick.
+// Input:  state - game state.
+// Output: Returns a description of what happened.
+std::string handleRadiationRain(GameState& state);
+
+// Function: handleInternalConflict
+// What it does: Handles fights among survivors. May set forceEvent5NextDay
+//               flag if no radio is present.
+// Input:  state - game state.
+// Output: Returns a description of the conflict.
+std::string handleInternalConflict(GameState& state);
+
+// Function: handleMysteriousDream
+// What it does: A survivor has a strange dream. May cause mutation.
+// Input:  state - game state.
+// Output: Returns a description of the dream event.
+std::string handleMysteriousDream(GameState& state);
+
+// Function: handleSpoiledSupplies
+// What it does: Some stored food or water goes bad overnight.
+// Input:  state - game state.
+// Output: Returns a description of spoilage.
+std::string handleSpoiledSupplies(GameState& state);
+
+// Function: handleUnexpectedVisitor
+// What it does: A stranger knocks on the shelter door. The player decides
+//               whether to open (choice = true) or ignore (choice = false).
+// Input:  state - game state, choice - true means open the door.
+// Output: Returns a description of the outcome.
+std::string handleUnexpectedVisitor(GameState& state, bool choice);  
+
+// Function: handleAnomalousSignal
+// What it does: A strange radio signal is detected. May set
+//               forceEvent5NextDay flag if the signal is unresolved.
+// Input:  state - game state.
+// Output: Returns a description of the signal event.
+std::string handleAnomalousSignal(GameState& state);
+
+
+// The 7 possible expedition destinations the player can visit during the day.
+enum class ExpeditionEventType {
+    SUPERMARKET,
+    WATER_PLANT,
+    PHARMACY,
+    OTHER_CAMP,
+    PERIMETER_CLEAR,
+    LABORATORY,
+    HIDDEN_STORAGE
+};
+
+// Player choices when encountering another survivor camp.
+enum class CampOption {
+    REQUEST_HELP,
+    ROB
+};
+
+// Player choices when clearing the perimeter around the shelter.
+enum class ClearOption {
+    OUTER_CLEAR,
+    INNER_SEARCH
+};
+
+// Function: processExpeditionEvent
+// What it does: Main dispatcher for daytime expeditions. Routes to the
+//               correct handler based on eventType.
+// Input:  state - game state, eventType - which location to visit,
+//         memberIndices - indices of survivors who went out,
+//         choice - optional sub-choice for branching events (default -1).
+// Output: Returns a narrative string describing the expedition result.
+std::string processExpeditionEvent(
+    GameState& state, 
+    ExpeditionEventType eventType,
+    const std::vector<int>& memberIndices,
+    int choice = -1
+);
+
+// Function: selectRandomExpeditionEvent
+// What it does: Picks a random expedition destination. If hasNote is set
+//               and usedNoteEffect is false, forces HIDDEN_STORAGE.
+// Input:  state - game state (checks hasNote and usedNoteEffect flags).
+// Output: Returns one ExpeditionEventType.
+ExpeditionEventType selectRandomExpeditionEvent(GameState& state);
+
+// Standard expedition handlers (no sub-choice needed)
+std::string handleSupermarket(GameState& state, const std::vector<int>& memberIndices);
+std::string handleWaterPlant(GameState& state, const std::vector<int>& memberIndices);
+std::string handlePharmacy(GameState& state, const std::vector<int>& memberIndices);
+std::string handleLaboratory(GameState& state, const std::vector<int>& memberIndices);
+
+// Triggers when the player found a note earlier. Sets usedNoteEffect flag.
+std::string handleHiddenStorage(GameState& state, const std::vector<int>& memberIndices);
+
+// Branching expedition handlers (player picks a sub-option)
+std::string handleOtherCamp(GameState& state, const std::vector<int>& memberIndices, CampOption option);
+std::string handlePerimeterClear(GameState& state, const std::vector<int>& memberIndices, ClearOption option);
+
+#endif // EVENTSYSTEM_H
