@@ -1,11 +1,5 @@
-/**
- * Project: Shelter: 10 Days (COMP2113 Group 150)
- * File: ResourceManager.cpp
- * -------------------------------------------------------------------------
- * Description: 
- * Implements the core survival mechanics including resource initialization, 
- * depletion logic with difficulty scaling, and medical treatment systems.
- */
+// ResourceManager.cpp
+// Implements initResources, consumeDaily, treat, and updateSickCounters.
 
 #include "player.h"
 #include "Tools.h"
@@ -42,9 +36,7 @@ void initResources(GameState& state, Difficulty diff, int plan) {
         SurvivorTrait::LUCKY
     };
     
-    // --- Algorithm: Fisher-Yates Shuffle ---
-    // Provides O(n) unbiased permutations of the trait pool to ensure
-    // every game session has a unique team composition.
+    // Shuffle so each game gives a different trait assignment.
     for (int i = 5; i > 0; i--) {
         int j = rand() % (i + 1);
         SurvivorTrait tmp = traitPool[i];
@@ -146,20 +138,19 @@ void consumeDaily(GameState& state) {
 
     // Step 5: Handle the shortage based on difficulty
     if (state.difficulty == Difficulty::EASY) {
-        // Easy mode logic: 
-        // Penalize based on the maximum deficit between Food/Water.
+        // On easy mode, only the larger of food/water shortage matters.
         int k = foodShortage;
         if (waterShortage > k) {
             k = waterShortage;
         }
 
-        // Stochastic selection of potential victims
+        // Pick k random healthy survivors as candidates to fall sick.
         std::vector<int> candidates = selectRandomSurvivors(state, k, true, false, false);
 
         for (int i = 0; i < (int)candidates.size(); i++) {
             int survivorIndex = candidates[i];
             double weakChance = 0.5;
-            // Trait Influence: FRAIL survivors are more susceptible to malnutrition.
+            // Frail survivors are more likely to get sick from a shortage.
             if (state.survivors[survivorIndex].trait == SurvivorTrait::FRAIL) {
                 weakChance = 0.7;
             }
@@ -172,21 +163,21 @@ void consumeDaily(GameState& state) {
     }
 
     if (state.difficulty == Difficulty::HARD) {
-        // Hard mode logic: Global probability scaling based on aggregate shortage.
+        // On hard mode, the bigger the total shortage, the more likely
+        // each healthy survivor falls sick.
         int totalShortage = foodShortage + waterShortage;
         double probability = 0.3 + (double)totalShortage / 15.0;
 
-        // --- Math: Probability Clamping [0.5, 1.0] ---
-        // Ensures that shortage always presents a significant threat in Hard mode.
+        // Clamp into [0.5, 1.0] so a shortage is always serious on hard.
         if (probability < 0.5) probability = 0.5;
         if (probability > 1.0) probability = 1.0;
 
-        // Iterate and apply Bernoulli trial for each healthy survivor
+        // Roll once for each healthy survivor.
         for (int i = 0; i < (int)state.survivors.size(); i++) {
             if (state.survivors[i].status == SurvivorStatus::HEALTHY) {
                 double thisChance = probability;
                 if (state.survivors[i].trait == SurvivorTrait::FRAIL) {
-                    thisChance += 0.2; // Additive penalty for FRAIL trait
+                    thisChance += 0.2;  // frail = +20% chance to fall sick
                     if (thisChance > 1.0) thisChance = 1.0;
                 }
                 bool becomesWeak = checkProbability(thisChance);
