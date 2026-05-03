@@ -1,5 +1,6 @@
 // Tools.cpp
-// Implementation of the utility functions declared in Tools.h.
+// Implementation of the utility functions declared in Tools.h:
+// random helpers, survivor selection, and save/load file operations.
 
 #include "Tools.h"
 #include "GameState.h"
@@ -19,8 +20,8 @@ const std::string SAVE_FILE_NAME = "shelter_save.txt";
 // What it does: Initializes the random number generator using the current time
 //               as a seed. This should be called once at the start of main()
 //               to make sure rand() produces different sequences each run.
-// Input:  None.
-// Output: None.
+// Input:  none.
+// Output: none.
 void initRandom() {
     srand(static_cast<unsigned int>(time(nullptr)));
 }
@@ -42,19 +43,17 @@ bool checkProbability(double probability) {
 // What it does: Randomly picks survivors whose status matches the requested
 //               filters. Deceased survivors are never selected. If fewer
 //               eligible survivors exist than requested, all are returned.
-// Input:
-//   state           - the game state (used to read the survivor list).
-//   count           - the number of survivors to pick.
-//   includeHealthy  - whether HEALTHY survivors are eligible.
-//   includeWeak     - whether WEAK survivors are eligible.
-//   includeMutated  - whether MUTATED survivors are eligible.
+// Input:  state - the game state (to read the survivor list),
+//         count - the number of survivors to pick,
+//         includeHealthy / includeWeak / includeMutated - which statuses
+//         are eligible for selection.
 // Output: A vector of indices into state.survivors.
 std::vector<int> selectRandomSurvivors(const GameState& state,
                                        int count,
                                        bool includeHealthy,
                                        bool includeWeak,
                                        bool includeMutated) {
-    // Step 1: collect every survivor that matches the filters.
+    // Collect every survivor that matches the filters.
     std::vector<int> candidates;
     for (int i = 0; i < (int)state.survivors.size(); i++) {
         SurvivorStatus s = state.survivors[i].status;
@@ -67,12 +66,12 @@ std::vector<int> selectRandomSurvivors(const GameState& state,
         }
     }
 
-    // Step 2: if we have fewer (or equal) candidates than requested, return all.
+    // If we have fewer (or equal) candidates than requested, return all.
     if ((int)candidates.size() <= count) {
         return candidates;
     }
 
-    // Step 3: shuffle with Fisher-Yates and keep the first `count` entries.
+    // Shuffle with Fisher-Yates and keep the first `count` entries.
     for (int i = (int)candidates.size() - 1; i > 0; i--) {
         int j = rand() % (i + 1);
         std::swap(candidates[i], candidates[j]);
@@ -81,44 +80,40 @@ std::vector<int> selectRandomSurvivors(const GameState& state,
     return candidates;
 }
 
-// ===========================================================================
-// Save / load
-//
+// ---- Save / Load ----
 // Save format is a simple line-based text file. Each piece of state is
-// written on its own line. This format is human-readable so it is easy to
-// debug and easy to demonstrate the File I/O coding requirement.
-// ===========================================================================
+// written on its own line so the file is human-readable and easy to debug.
 
 // Function: hasSaveFile
-// What it does: Check whether a save file exists in the current directory by
-//               attempting to open it for reading.
-// Input:  None.
-// Output: true if the save file can be opened, false otherwise.
+// What it does: Checks whether a save file exists by trying to open it.
+// Input:  none.
+// Output: true if the file can be opened, false otherwise.
 bool hasSaveFile() {
     std::ifstream f(SAVE_FILE_NAME);
     return f.good();
 }
 
 // Function: deleteSaveFile
-// What it does: Remove the save file from disk. Used after a game finishes so
-//               the next run starts fresh.
-// Input:  None.
-// Output: None.
+// What it does: Removes the save file from disk. Called when a game ends
+//               so the next run starts fresh.
+// Input:  none.
+// Output: none.
 void deleteSaveFile() {
     std::remove(SAVE_FILE_NAME.c_str());
 }
 
 // Function: saveGame
-// What it does: Write the entire GameState to disk as a line-based text file.
-//               One line per field, in a fixed order. Survivors are written
-//               in a block: a count line followed by 4 lines per survivor.
+// What it does: Writes the entire GameState to disk as a line-based text file.
+//               One line per field in a fixed order. Survivors are written as
+//               a count line followed by 4 lines per survivor (name, status,
+//               daysWeak, trait).
 // Input:  state - the GameState to save (read-only reference).
 // Output: true on success, false on file error.
 bool saveGame(const GameState& state) {
     std::ofstream out(SAVE_FILE_NAME);
     if (!out.is_open()) return false;
 
-    // Header / version marker so a malformed file can be detected.
+    // Header so a malformed file can be detected on load.
     out << "SHELTER_SAVE_V1\n";
 
     // Core scalar state.
@@ -152,10 +147,9 @@ bool saveGame(const GameState& state) {
 }
 
 // Function: loadGame
-// What it does: Read a previously saved GameState from disk. The format must
-//               match what saveGame() writes. On any failure (missing file,
-//               bad header, parse error) the function returns false and
-//               leaves `state` in an undefined partial state.
+// What it does: Reads a previously saved GameState from disk. The format must
+//               match what saveGame() writes. Returns false on any error
+//               (missing file, wrong header, parse failure).
 // Input:  state - the GameState to populate (will be overwritten).
 // Output: true on success, false on any error.
 bool loadGame(GameState& state) {
@@ -204,8 +198,7 @@ bool loadGame(GameState& state) {
         state.survivors.push_back(s);
     }
 
-    // Reset transient daily state - these are not saved and should always
-    // start cleanly when resuming.
+    // Reset transient daily state that is not saved.
     state.expeditionMemberIds.clear();
     state.wasTreatedToday = false;
     state.gameEnded = false;

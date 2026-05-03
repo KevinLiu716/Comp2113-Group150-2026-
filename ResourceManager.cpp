@@ -1,5 +1,5 @@
 // ResourceManager.cpp
-// medicine treatment, and the sick day counter updates.
+// Implements initResources, consumeDaily, treat, and updateSickCounters.
 
 #include "player.h"
 #include "Tools.h"
@@ -35,13 +35,15 @@ void initResources(GameState& state, Difficulty diff, int plan) {
         SurvivorTrait::SOLDIER,
         SurvivorTrait::LUCKY
     };
-    // Fisher-Yates shuffle so each game has different trait assignments.
+    
+    // Shuffle so each game gives a different trait assignment.
     for (int i = 5; i > 0; i--) {
         int j = rand() % (i + 1);
         SurvivorTrait tmp = traitPool[i];
         traitPool[i] = traitPool[j];
         traitPool[j] = tmp;
     }
+
     for (int i = 0; i < 6; i++) {
         Survivor newSurvivor;
         newSurvivor.name = names[i];
@@ -49,7 +51,7 @@ void initResources(GameState& state, Difficulty diff, int plan) {
         state.survivors.push_back(newSurvivor);
     }
 
-    // Reset all special item flags to false
+    // Reset all special item flags to false (Clean slate for new session)
     state.hasRadio = false;
     state.hasNote = false;
     state.usedNoteEffect = false;
@@ -65,7 +67,8 @@ void initResources(GameState& state, Difficulty diff, int plan) {
     state.gameEnded = false;
     state.endingMessage = "";
 
-    // Now set food, water, and medicine based on difficulty and plan
+    // --- Difficulty Scaling & Starting Loadout ---
+    // Logic: Balance starting hunger vs. medical security.
     if (diff == Difficulty::EASY && plan == 1) {
         // Easy mode, Plan A: Basic Stockpile
         state.food = 18;
@@ -79,7 +82,7 @@ void initResources(GameState& state, Difficulty diff, int plan) {
         state.medicine = 2;
     }
     if (diff == Difficulty::HARD && plan == 1) {
-        // Hard mode, Plan A: All-in, no medicine, one person starts weak
+        // Hard mode, Plan A: High risk, high reward. One member pre-infected (Weak).
         state.food = 18;
         state.water = 18;
         state.medicine = 0;
@@ -117,49 +120,37 @@ void consumeDaily(GameState& state) {
     int foodShortage = requiredFood - state.food;
     int waterShortage = requiredWater - state.water;
 
-    // Make sure shortage is not negative (no shortage means 0)
-    if (foodShortage < 0) {
-        foodShortage = 0;
-    }
-    if (waterShortage < 0) {
-        waterShortage = 0;
-    }
+    // Defensive Check: Ensure shortage is non-negative
+    if (foodShortage < 0) foodShortage = 0;
+    if (waterShortage < 0) waterShortage = 0;
 
     // Step 3: Consume the resources
-    // Subtract the required amount from the current amount
-    // But the result cannot go below 0
+    // Logic: Atomic update of resources, clamping minimum value at 0.
     state.food = state.food - requiredFood;
-    if (state.food < 0) {
-        state.food = 0;
-    }
+    if (state.food < 0) state.food = 0;
     state.water = state.water - requiredWater;
-    if (state.water < 0) {
-        state.water = 0;
-    }
+    if (state.water < 0) state.water = 0;
 
-    // Step 4: If there is no shortage at all, we are done
+    // Step 4: Short-circuit if all needs are met
     if (foodShortage == 0 && waterShortage == 0) {
         return;
     }
 
     // Step 5: Handle the shortage based on difficulty
     if (state.difficulty == Difficulty::EASY) {
-        // Easy mode logic:
-        // k = the larger of the two shortages
+        // On easy mode, only the larger of food/water shortage matters.
         int k = foodShortage;
         if (waterShortage > k) {
             k = waterShortage;
         }
 
-        // Select k healthy survivors randomly using the tool function
-        // Parameters: state, count=k, includeHealthy=true, includeWeak=false, includeMutated=false
+        // Pick k random healthy survivors as candidates to fall sick.
         std::vector<int> candidates = selectRandomSurvivors(state, k, true, false, false);
 
-        // Each selected survivor has a 50% chance to become weak.
-        // TRAIT: a FRAIL survivor has +20% chance instead (70%).
         for (int i = 0; i < (int)candidates.size(); i++) {
             int survivorIndex = candidates[i];
             double weakChance = 0.5;
+            // Frail survivors are more likely to get sick from a shortage.
             if (state.survivors[survivorIndex].trait == SurvivorTrait::FRAIL) {
                 weakChance = 0.7;
             }
@@ -172,28 +163,21 @@ void consumeDaily(GameState& state) {
     }
 
     if (state.difficulty == Difficulty::HARD) {
-        // Hard mode logic:
-        // Calculate the probability for all healthy survivors
+        // On hard mode, the bigger the total shortage, the more likely
+        // each healthy survivor falls sick.
         int totalShortage = foodShortage + waterShortage;
         double probability = 0.3 + (double)totalShortage / 15.0;
 
-        // The probability cannot be lower than 0.5 (50 percent)
-        if (probability < 0.5) {
-            probability = 0.5;
-        }
-        // The probability cannot be higher than 1.0 (100 percent)
-        if (probability > 1.0) {
-            probability = 1.0;
-        }
+        // Clamp into [0.5, 1.0] so a shortage is always serious on hard.
+        if (probability < 0.5) probability = 0.5;
+        if (probability > 1.0) probability = 1.0;
 
-        // Check every survivor one by one.
-        // TRAIT: FRAIL survivors get +20% on top of the base chance, capped at 100%.
+        // Roll once for each healthy survivor.
         for (int i = 0; i < (int)state.survivors.size(); i++) {
-            // Only healthy survivors can become weak
             if (state.survivors[i].status == SurvivorStatus::HEALTHY) {
                 double thisChance = probability;
                 if (state.survivors[i].trait == SurvivorTrait::FRAIL) {
-                    thisChance += 0.2;
+                    thisChance += 0.2;  // frail = +20% chance to fall sick
                     if (thisChance > 1.0) thisChance = 1.0;
                 }
                 bool becomesWeak = checkProbability(thisChance);
@@ -217,20 +201,20 @@ void consumeDaily(GameState& state) {
 // Input: state - a reference to the GameState object.
 // Output: This function does not return a value. It modifies the state directly.
 void treat(GameState& state) {
+    // Check for the "Doctor" optimization to save resources
     bool hasDoctor = state.hasLivingSurvivorWithTrait(SurvivorTrait::DOCTOR);
 
-    // Need either medicine OR a doctor to treat.
+    // Prerequisite Check: Ensure resources or expertise are available
     if (state.medicine <= 0 && !hasDoctor) {
         return;
     }
 
     if (!hasDoctor) {
-        // Normal case: 1 medicine consumed.
+        // Cost Deduction: Generic medicine usage
         state.medicine = state.medicine - 1;
     }
-    // If a doctor is alive, no medicine is consumed.
 
-    // Go through every survivor and heal all weak ones
+    // Mass healing loop: Resets biological status for all WEAK members
     for (int i = 0; i < (int)state.survivors.size(); i++) {
         if (state.survivors[i].status == SurvivorStatus::WEAK) {
             state.survivors[i].status = SurvivorStatus::HEALTHY;
@@ -238,7 +222,7 @@ void treat(GameState& state) {
         }
     }
 
-    // Mark that treatment was done today
+    // System Flag: Prevents multiple treatments in a single turn if triggered via UI
     state.wasTreatedToday = true;
 }
 
@@ -252,16 +236,13 @@ void treat(GameState& state) {
 // Input: state - a reference to the GameState object.
 // Output: This function does not return a value. It modifies the state directly.
 void updateSickCounters(GameState& state) {
-    // Go through every survivor one by one
+    // Survival Window Check: Survivors only have a 48-hour window to receive medicine.
     for (int i = 0; i < (int)state.survivors.size(); i++) {
-        // Only process survivors who are currently weak
         if (state.survivors[i].status == SurvivorStatus::WEAK) {
-            // Increase the sick day counter by 1
             state.survivors[i].daysWeak = state.survivors[i].daysWeak + 1;
 
-            // Check if this survivor has been weak for too long
+            // Fatality Logic: Transition from WEAK to DECEASED status.
             if (state.survivors[i].daysWeak >= 2) {
-                // This survivor has been weak for 2 days, they die
                 state.survivors[i].status = SurvivorStatus::DECEASED;
                 state.survivors[i].daysWeak = 0;
             }

@@ -1,5 +1,5 @@
 // Tools.h
-// Utility functions used across the game
+// Random number helpers and save/load functions.
 
 #ifndef TOOLS_H
 #define TOOLS_H
@@ -8,68 +8,36 @@
 #include <vector>
 #include <string>
 
-// Function: initRandom
-// What it does: Initialize the random seed. Call once at the start of main().
-// Input:  None.
-// Output: None.
+// Seed the random number generator. Call once at the start of main().
 void initRandom();
 
-// Function: checkProbability
-// What it does: Decide whether a random event with a given probability happens.
-// Input:  probability - a value between 0.0 and 1.0 (e.g. 0.3 means 30% chance).
-// Output: true if the event happens, false otherwise.
+// Returns true with the given probability (0.0 - 1.0).
+// e.g. checkProbability(0.3) returns true about 30% of the time.
 bool checkProbability(double probability);
 
-// Function: selectRandomSurvivors
-// What it does: Randomly pick survivors that match the requested status filters.
-// Input:
-//   state           - the game state (used to read the survivor list).
-//   count           - how many survivors to pick.
-//   includeHealthy  - whether to consider HEALTHY survivors.
-//   includeWeak     - whether to consider WEAK survivors.
-//   includeMutated  - whether to consider MUTATED survivors.
-// Output: A vector of indices into state.survivors. If fewer eligible survivors
-//         exist than requested, all of them are returned.
+// Pick `count` random survivors that match the given status filters.
+// Returns indices into state.survivors. If there aren't enough eligible
+// survivors, returns whatever is available.
 std::vector<int> selectRandomSurvivors(const GameState& state,
                                        int count,
                                        bool includeHealthy = true,
                                        bool includeWeak = false,
                                        bool includeMutated = false);
 
-// ===========================================================================
-// Save / load (File I/O)
-// ===========================================================================
-
-// The fixed filename used for saved games.
+// Filename used for saved games (in the current directory).
 extern const std::string SAVE_FILE_NAME;
 
-// Function: hasSaveFile
-// What it does: Check whether a save file exists in the current directory.
-// Input:  None.
-// Output: true if a save file is found, false otherwise.
+// Returns true if a save file exists.
 bool hasSaveFile();
 
-// Function: saveGame
-// What it does: Write the entire GameState to disk so the player can resume
-//               later. Format is a simple line-based text file: each line is
-//               one field. Called automatically at the end of every day.
-// Input:  state - the GameState to save (read-only).
-// Output: true if the save succeeded, false on file error.
+// Save the game state to disk. Each field is written on its own line.
+// Returns true on success.
 bool saveGame(const GameState& state);
 
-// Function: loadGame
-// What it does: Read a previously saved GameState from disk into the given
-//               state object. Restores survivors, resources, items, flags,
-//               current day, and ending status.
-// Input:  state - the GameState to populate (will be overwritten).
-// Output: true if the load succeeded, false on file error or bad format.
+// Load a saved game from disk into `state`. Returns true on success.
 bool loadGame(GameState& state);
 
-// Function: deleteSaveFile
-// What it does: Remove the save file from disk. Called when a game ends so
-//               the next run starts fresh.
-// Input:  None.
-// Output: None.
+// Delete the save file.
 void deleteSaveFile();
 
-#endif // TOOLS_H
+#endif

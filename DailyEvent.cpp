@@ -1,6 +1,6 @@
 /**
  * @file DailyEvent.cpp
- * @author WU Bozhou (UID: 3036588955) - Game design & Event System
+ * @author WU Bozhou; comments: HU Zhenghua (hzh) - Test & Verification focus.
  * @brief Logic implementation of night-time random events.
  * 
  * This module fulfills "Feature 1: Random Event" and utilizes "Feature 2: Data Structures" 
@@ -20,10 +20,11 @@ int random1to6() {
     return (rand() % 6) + 1;
 }
 
-/**
- * @brief UI handling for event choices.
- * Implemented as part of the "Complete UI/UX" feature.
- */
+// Function: getPlayerChoice
+// What it does: Displays a prompt and waits for the player to input 1 or 2. 
+//               Includes robust input validation to handle non-integer input and EOF.
+// Input:  prompt - The string message to display to the user.
+// Output: Returns true if the user selects 1 (Open the door), false if 2 or EOF.
 bool getPlayerChoice(const std::string& prompt) {
     std::cout << prompt << std::endl;
     std::cout << "1. Open the door" << std::endl;
@@ -44,15 +45,20 @@ bool getPlayerChoice(const std::string& prompt) {
     }
 }
 
-// Helper: pick one of the variants[] strings at random.
+// Function: pickVariant
+// What it does: Selects a random string from an array of text variants to add flavor to events.
+// Input:  variants[] - Array of strings.
+//         n - The size of the array.
+// Output: Returns the randomly selected string.
 static std::string pickVariant(const std::string variants[], int n) {
     return variants[rand() % n];
 }
 
-/**
- * @brief Main dispatcher for night events.
- * Coordinates with the Global Game State (struct GameState).[cite: 2]
- */
+// Function: processDailyEvent
+// What it does: Acts as the main dispatcher, routing the selected event type to its specific handler function.
+// Input:  state - Reference to the global GameState.
+//         eventType - The specific DailyEventType enum to process.
+// Output: Returns a formatted string detailing the outcome of the night event.
 std::string processDailyEvent(GameState& state, DailyEventType eventType) {
     switch(eventType) {
         case DailyEventType::RADIATION_RAIN:
@@ -77,10 +83,11 @@ std::string processDailyEvent(GameState& state, DailyEventType eventType) {
     }
 }
 
-/**
- * @brief Selects a random event using rand().
- * Implements the logic specified in Feature 1 of the project description.[cite: 2]
- */
+// Function: selectRandomDailyEvent
+// What it does: Randomly determines which event occurs tonight (1-6). 
+//               Also checks if forceEvent5NextDay flag is active, overriding the random roll.
+// Input:  state - Reference to the global GameState.
+// Output: Returns the chosen DailyEventType enum.
 DailyEventType selectRandomDailyEvent(GameState& state) {
     if (state.forceEvent5NextDay) {
         state.forceEvent5NextDay = false;
@@ -100,10 +107,11 @@ DailyEventType selectRandomDailyEvent(GameState& state) {
     }
 }
 
-/**
- * @brief Event Logic: Radiation Rain.
- * Survivors who remain 'WEAK' for 2 days will perish (status: DECEASED).[cite: 2]
- */
+// Function: handleRadiationRain
+// What it does: Processes the Radiation Rain event. Finds all survivors currently in the WEAK state 
+//               and increments their weakness duration. If a survivor is weak for 2 days, their status changes to DECEASED.
+// Input:  state - Reference to the global GameState.
+// Output: Returns a descriptive string summarizing health changes or deaths.
 std::string handleRadiationRain(GameState& state) {
     static const std::string variants[3] = {
         "Radiation Rain: The sky turns sickly green.\nDeadly droplets hammer the shelter walls.\n",
@@ -136,10 +144,11 @@ std::string handleRadiationRain(GameState& state) {
     return result;
 }
 
-/**
- * @brief Event Logic: Internal Conflict.
- * Interaction between resources (Radio) and event outcomes.[cite: 2]
- */
+// Function: handleInternalConflict
+// What it does: Processes the Internal Conflict event. Checks if the shelter has a radio. 
+//               If yes, negates the event. If no, sets the flag to force an Unexpected Visitor event the next day.
+// Input:  state - Reference to the global GameState.
+// Output: Returns a string describing the conflict outcome.
 std::string handleInternalConflict(GameState& state) {
     static const std::string variants[3] = {
         "Internal Conflict: Tempers flare over the last ration of water.\n",
@@ -158,10 +167,11 @@ std::string handleInternalConflict(GameState& state) {
     return result;
 }
 
-/**
- * @brief Event Logic: Mysterious Dream.
- * Uses checkProbability() for determining mutation outcomes.[cite: 2]
- */
+// Function: handleMysteriousDream
+// What it does: Processes the Mysterious Dream event. Selects one healthy or weak survivor randomly. 
+//               There is a 50% chance the selected survivor's status changes to MUTATED.
+// Input:  state - Reference to the global GameState.
+// Output: Returns a string detailing who was affected and if they mutated.
 std::string handleMysteriousDream(GameState& state) {
     static const std::string variants[3] = {
         "Mysterious Dream: A whisper crawls through one survivor's sleep.\n",
@@ -190,10 +200,11 @@ std::string handleMysteriousDream(GameState& state) {
     return result;
 }
 
-/**
- * @brief Event Logic: Spoiled Supplies.
- * Managed by Liu Shuai Kai (Resource Management).[cite: 2]
- */
+// Function: handleSpoiledSupplies
+// What it does: Processes the Spoiled Supplies event. Randomly chooses to reduce either food or water by 2 units. 
+//               Safely handles cases where resources are less than 2.
+// Input:  state - Reference to the global GameState.
+// Output: Returns a string specifying which resource was lost and by how much.
 std::string handleSpoiledSupplies(GameState& state) {
     static const std::string variants[3] = {
         "Spoiled Supplies: A foul stench rises from the storage corner.\n",
@@ -225,10 +236,12 @@ std::string handleSpoiledSupplies(GameState& state) {
     return result;
 }
 
-/**
- * @brief Event Logic: Unexpected Visitor.
- * Probabilistic outcomes determining survivor safety or resource loss.[cite: 2]
- */
+// Function: handleUnexpectedVisitor
+// What it does: Processes the Unexpected Visitor event based on the player's choice. 
+//               If opened, rolls for 3 outcomes (gain supplies, lose supplies, gain radio).
+// Input:  state - Reference to the global GameState.
+//         openTheDoor - Boolean representing the player's prior choice.
+// Output: Returns a string describing the outcome of opening or ignoring the door.
 std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
     std::string result = "";
     if (openTheDoor) {
@@ -277,10 +290,11 @@ std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
     return result;
 }
 
-/**
- * @brief Event Logic: Anomalous Signal.
- * Key event for unlocking specific narrative endings.[cite: 2]
- */
+// Function: handleAnomalousSignal
+// What it does: Processes the Anomalous Signal event. If the shelter has a radio, sets triggeredEvent6 flag to true. 
+//               If not, forces an Unexpected Visitor event the next day.
+// Input:  state - Reference to the global GameState.
+// Output: Returns a string describing the signal's impact on the shelter.
 std::string handleAnomalousSignal(GameState& state) {
     static const std::string variants[3] = {
         "Anomalous Signal: A rhythmic static rises from the dead air.\n",

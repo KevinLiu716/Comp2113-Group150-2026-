@@ -89,24 +89,64 @@ public:
     std::string endingMessage;
     EndingType endingType;
 
-    // Constructor
+    // Function: GameState (constructor)
+    // What it does: Initialize all fields to safe defaults. Creates 6 survivors and assigns traits.
+    // Input:  none.
+    // Output: A fully initialized GameState object ready for day 1.
     GameState();
 
-    // Status query helpers
+    // Function: countSurvivorsByStatus
+    // What it does: Loops through the survivor list and counts how many currently have the given status.
+    // Input:  status - the SurvivorStatus to look for (HEALTHY, WEAK, MUTATED, or DECEASED).
+    // Output: Returns an integer, the number of survivors with that status.
     int countSurvivorsByStatus(SurvivorStatus status) const;
+
+    // Function: countHealthySurvivors
+    // What it does: Counts how many survivors are currently HEALTHY.
+    // Input:  none.
+    // Output: Returns the number of healthy survivors.
     int countHealthySurvivors() const;
+
+    // Function: countWeakSurvivors
+    // What it does: Counts how many survivors are currently WEAK.
+    // Input:  none.
+    // Output: Returns the number of weak survivors.
     int countWeakSurvivors() const;
+
+    // Function: countMutatedSurvivors
+    // What it does: Counts how many survivors are currently MUTATED.
+    // Input:  none.
+    // Output: Returns the number of mutated survivors.
     int countMutatedSurvivors() const;
+
+    // Function: countLivingSurvivors
+    // What it does: Counts everyone who is not DECEASED (HEALTHY + WEAK + MUTATED).
+    // Input:  none.
+    // Output: Returns the total number of living survivors.
     int countLivingSurvivors() const;
 
-    // Helper: does any LIVING survivor have the given trait?
+    // Function: hasLivingSurvivorWithTrait
+    // What it does: Returns true if any non-deceased, non-mutated survivor has the given trait.
+    // Input:  trait - the SurvivorTrait to search for.
+    // Output: Returns true if at least one qualifying survivor has it, false otherwise.
     bool hasLivingSurvivorWithTrait(SurvivorTrait trait) const;
 
-    // Daily reset
+    // Function: resetDailyStates
+    // What it does: Clears the expedition member list from the previous day and resets the treatment flag.
+    // Input:  none.
+    // Output: Modifies the GameState object internally.
     void resetDailyStates();
 
-    // Daily resource consumption requirements
+    // Function: calculateRequiredFood
+    // What it does: Calculates how much food is needed for one day (1 per HEALTHY or WEAK survivor).
+    // Input:  none.
+    // Output: Returns the total food needed for today.
     int calculateRequiredFood() const;
+
+    // Function: calculateRequiredWater
+    // What it does: Calculates how much water is needed for one day (1 per HEALTHY or WEAK survivor).
+    // Input:  none.
+    // Output: Returns the total water needed for today.
     int calculateRequiredWater() const;
 };
 
