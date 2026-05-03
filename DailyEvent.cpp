@@ -1,6 +1,11 @@
-// DailyEvent.cpp
-// Author: HU Zhenghua (hzh)
-// Implements the night-time random events.
+/**
+ * @file DailyEvent.cpp
+ * @author WU Bozhou; comments: HU Zhenghua (hzh) - Test & Verification focus.
+ * @brief Logic implementation of night-time random events.
+ * 
+ * This module fulfills "Feature 1: Random Event" and utilizes "Feature 2: Data Structures" 
+ * to manage survivor states and resource fluctuations.
+ */
 
 #include "EventSystem.h"
 #include "Tools.h"
@@ -9,13 +14,17 @@
 #include <cstdlib>
 #include <ctime>
 
-// random1to6 is defined here. The duplicate in Expedition.cpp was removed.
+// Note: random1to6() is defined only here. The duplicate in Expedition.cpp
+// has been removed.
 int random1to6() {
     return (rand() % 6) + 1;
 }
 
-// Show a prompt asking the player to pick 1 or 2.
-// Returns true for 1 (open the door), false for 2 or EOF.
+// Function: getPlayerChoice
+// What it does: Displays a prompt and waits for the player to input 1 or 2. 
+//               Includes robust input validation to handle non-integer input and EOF.
+// Input:  prompt - The string message to display to the user.
+// Output: Returns true if the user selects 1 (Open the door), false if 2 or EOF.
 bool getPlayerChoice(const std::string& prompt) {
     std::cout << prompt << std::endl;
     std::cout << "1. Open the door" << std::endl;
