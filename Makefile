@@ -9,58 +9,51 @@
 
 # ----- Configuration -----
 
-# C++ compiler. g++ is the GNU C++ compiler, available on macOS, Linux,
-# and the CS department server.
+# Compiler to use
 CXX      = g++
 
-# Compiler flags:
-#   -std=c++17   Use the C++17 language standard
-#   -Wall        Enable common compiler warnings
-#   -O2          Optimize the generated code (faster runtime)
+# Flags: C++17 standard, show warnings, optimize for speed
 CXXFLAGS = -std=c++17 -Wall -O2
 
-# Name of the final executable produced by `make`.
+# Output executable name
 TARGET   = game
 
-# All source files. Using wildcard so adding a new .cpp does not require
-# editing this Makefile.
+# Grab all .cpp files in this directory automatically
 SRCS     = $(wildcard *.cpp)
 
-# Corresponding object files (.cpp -> .o). Object files are intermediate
-# build artifacts that get linked together into the final executable.
+# Turn each .cpp into a matching .o for compilation
 OBJS     = $(SRCS:.cpp=.o)
 
-# All header files. The build will re-compile if any header changes.
+# All headers, so changing any header triggers a rebuild
 HEADERS  = $(wildcard *.h)
 
 
 # ----- Targets -----
 
-# Default target. Just running `make` triggers this.
+# Default: just build the game
 all: $(TARGET)
 
-# Link all object files into the final executable.
+# Link everything together into the final executable
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $(TARGET)
 	@echo ""
 	@echo "  Build successful! Run with:  ./$(TARGET)   or   make run"
 	@echo ""
 
-# Pattern rule: how to compile any .cpp file into a .o file.
-# The .o is rebuilt whenever the .cpp or any header changes.
+# Compile each .cpp into .o; rebuild if the source or any header changed
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build (if needed) and immediately run the game.
+# Build if needed, then run immediately
 run: $(TARGET)
 	./$(TARGET)
 
-# Remove all build artifacts so you can rebuild from scratch.
+# Delete all compiled files so next build starts fresh
 clean:
 	rm -f $(OBJS) $(TARGET)
 	@echo "  Cleaned all build artifacts."
 
-# Print a quick help message.
+# Print available targets
 help:
 	@echo "Available make targets:"
 	@echo "  make          Build the game (default target)"
@@ -68,5 +61,5 @@ help:
 	@echo "  make clean    Remove the game executable and object files"
 	@echo "  make help     Show this help"
 
-# These targets are not real files, so make should always run them when asked.
+# Not real files, always run these when requested
 .PHONY: all run clean help
