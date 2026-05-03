@@ -1,4 +1,4 @@
-// player.cpp
+++// player.cpp
 // Now also assigns survivor names and traits at construction.
 
 #include "GameState.h"
@@ -15,7 +15,7 @@ GameState::GameState() {
     currentDay = 1;
 
     food = 0;
-    water = 0;
+    water = 0;++
     medicine = 0;
 
     hasRadio = false;
