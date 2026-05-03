@@ -1,6 +1,11 @@
-// DailyEvent.cpp
-// Implementation of daily (night) random events.
-// Each event has 2-3 narrative variants chosen at random for replayability.
+/**
+ * @file DailyEvent.cpp
+ * @author WU Bozhou (UID: 3036588955) - Game design & Event System
+ * @brief Logic implementation of night-time random events.
+ * 
+ * This module fulfills "Feature 1: Random Event" and utilizes "Feature 2: Data Structures" 
+ * to manage survivor states and resource fluctuations.
+ */
 
 #include "EventSystem.h"
 #include "Tools.h"
@@ -15,6 +20,10 @@ int random1to6() {
     return (rand() % 6) + 1;
 }
 
+/**
+ * @brief UI handling for event choices.
+ * Implemented as part of the "Complete UI/UX" feature.
+ */
 bool getPlayerChoice(const std::string& prompt) {
     std::cout << prompt << std::endl;
     std::cout << "1. Open the door" << std::endl;
@@ -40,7 +49,10 @@ static std::string pickVariant(const std::string variants[], int n) {
     return variants[rand() % n];
 }
 
-// Main dispatcher for night events.
+/**
+ * @brief Main dispatcher for night events.
+ * Coordinates with the Global Game State (struct GameState).[cite: 2]
+ */
 std::string processDailyEvent(GameState& state, DailyEventType eventType) {
     switch(eventType) {
         case DailyEventType::RADIATION_RAIN:
@@ -65,7 +77,10 @@ std::string processDailyEvent(GameState& state, DailyEventType eventType) {
     }
 }
 
-// Choose a random daily event for tonight.
+/**
+ * @brief Selects a random event using rand().
+ * Implements the logic specified in Feature 1 of the project description.[cite: 2]
+ */
 DailyEventType selectRandomDailyEvent(GameState& state) {
     if (state.forceEvent5NextDay) {
         state.forceEvent5NextDay = false;
@@ -85,6 +100,10 @@ DailyEventType selectRandomDailyEvent(GameState& state) {
     }
 }
 
+/**
+ * @brief Event Logic: Radiation Rain.
+ * Survivors who remain 'WEAK' for 2 days will perish (status: DECEASED).[cite: 2]
+ */
 std::string handleRadiationRain(GameState& state) {
     static const std::string variants[3] = {
         "Radiation Rain: The sky turns sickly green.\nDeadly droplets hammer the shelter walls.\n",
@@ -117,6 +136,10 @@ std::string handleRadiationRain(GameState& state) {
     return result;
 }
 
+/**
+ * @brief Event Logic: Internal Conflict.
+ * Interaction between resources (Radio) and event outcomes.[cite: 2]
+ */
 std::string handleInternalConflict(GameState& state) {
     static const std::string variants[3] = {
         "Internal Conflict: Tempers flare over the last ration of water.\n",
@@ -135,6 +158,10 @@ std::string handleInternalConflict(GameState& state) {
     return result;
 }
 
+/**
+ * @brief Event Logic: Mysterious Dream.
+ * Uses checkProbability() for determining mutation outcomes.[cite: 2]
+ */
 std::string handleMysteriousDream(GameState& state) {
     static const std::string variants[3] = {
         "Mysterious Dream: A whisper crawls through one survivor's sleep.\n",
@@ -163,6 +190,10 @@ std::string handleMysteriousDream(GameState& state) {
     return result;
 }
 
+/**
+ * @brief Event Logic: Spoiled Supplies.
+ * Managed by Liu Shuai Kai (Resource Management).[cite: 2]
+ */
 std::string handleSpoiledSupplies(GameState& state) {
     static const std::string variants[3] = {
         "Spoiled Supplies: A foul stench rises from the storage corner.\n",
@@ -194,6 +225,10 @@ std::string handleSpoiledSupplies(GameState& state) {
     return result;
 }
 
+/**
+ * @brief Event Logic: Unexpected Visitor.
+ * Probabilistic outcomes determining survivor safety or resource loss.[cite: 2]
+ */
 std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
     std::string result = "";
     if (openTheDoor) {
@@ -242,6 +277,10 @@ std::string handleUnexpectedVisitor(GameState& state, bool openTheDoor) {
     return result;
 }
 
+/**
+ * @brief Event Logic: Anomalous Signal.
+ * Key event for unlocking specific narrative endings.[cite: 2]
+ */
 std::string handleAnomalousSignal(GameState& state) {
     static const std::string variants[3] = {
         "Anomalous Signal: A rhythmic static rises from the dead air.\n",
