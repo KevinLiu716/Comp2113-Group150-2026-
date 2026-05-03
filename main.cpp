@@ -1,7 +1,15 @@
-// main.cpp
-// Entry point of the game. Drives the day-by-day main loop:
-//   start menu -> (load saved game OR difficulty + supplies) ->
-//   daily loop (10 days, with save-and-quit at any time) -> ending.
+/**
+ *[cite: 1]
+ * Project: Shelter: 10 Days (COMP2113 Group 150)
+ * File: main.cpp
+ * -------------------------------------------------------------------------
+ * Description: 
+ * This file serves as the central orchestration layer (Game Loop) of the project.
+ * It manages the lifecycle of the game, including:
+ *   1. Low-level TTY terminal configuration for improved UX.
+ *   2. Persistent state management (Save/Load system).
+ *   3. The 10-day iterative survival logic and branching narrative endings.
+ */
 
 #include "ui.h"
 #include "GameState.h"
@@ -11,28 +19,31 @@
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
-
-// We explicitly turn on the terminal's line-editing features so that
-// the Backspace key actually deletes a character on screen rather than
-// echoing as '^H'. Without this, some shells / PTYs (especially when
-// launched from inside VS Code, tmux, or `make run`) leave ECHOE off
-// and Backspace looks broken. We snapshot the original settings on
-// entry and restore them when the program exits, so we never leave
-// the terminal in a bad state.
 #include <termios.h>
 #include <unistd.h>
+
+// =========================================================================
+// SECTION: System-Level Terminal Configuration (POSIX)
+// =========================================================================
 
 static struct termios g_originalTermios;
 static bool g_termiosSaved = false;
 
+/**
+ * Restores the terminal to its original state before the program started.
+ * Registered via std::atexit to ensure system integrity even on crashes.[cite: 1]
+ */
 static void restoreTerminal() {
     if (g_termiosSaved) {
         tcsetattr(STDIN_FILENO, TCSANOW, &g_originalTermios);
     }
 }
 
-// Enable canonical mode + echo + erase-on-backspace. Safe to call on
-// non-tty stdin (e.g. when input is piped); in that case it just no-ops.
+/**
+ * Configures the terminal I/O behavior.
+ * Specifically enables ECHOE (Backspace visual erase) and ICANON (Canonical mode)
+ * to ensure consistent behavior across different SSH clients/shells (e.g., Academy server).[cite: 1]
+ */
 static void enableTerminalLineEditing() {
     if (!isatty(STDIN_FILENO)) return;
     if (tcgetattr(STDIN_FILENO, &g_originalTermios) != 0) return;
@@ -40,87 +51,78 @@ static void enableTerminalLineEditing() {
     std::atexit(restoreTerminal);
 
     struct termios t = g_originalTermios;
-    // ICANON: line-by-line input (Enter terminates a line).
-    // ECHO:   echo typed characters.
-    // ECHOE:  Backspace visually erases the previous character.
-    // ECHOK:  the Kill character (Ctrl-U) erases the whole line.
+    // ICANON: Enable line-buffered input.
+    // ECHOE:  Map backspace to the "Erase" sequence (essential for modern PTYs).
     t.c_lflag |= (ICANON | ECHO | ECHOE | ECHOK);
     tcsetattr(STDIN_FILENO, TCSANOW, &t);
 }
 
-// Function: determineEnding
-// Purpose:  Inspect the final game state and decide which of the six
-//           endings the player reached. Sets both endingType (used by the
-//           UI to pick a banner and color) and endingMessage (the text).
-// Input:    state - reference to the final game state
-// Output:   none (mutates state.endingType and state.endingMessage)
+// =========================================================================
+// SECTION: Game Logic & Branching Narrative
+// =========================================================================
+
+/**
+ * Procedural Ending Determinism:
+ * Evaluates the 'GameState' metrics (survival count, health, mutations, resources)
+ * to trigger one of the six distinct narrative outcomes.[cite: 1]
+ */
 void determineEnding(GameState& state) {
     int alive = state.countLivingSurvivors();
     int healthy = state.countHealthySurvivors();
     int mutated = state.countMutatedSurvivors();
     int totalSupplies = state.food + state.water;
 
+    // Priority 1: Total Extinction
     if (alive == 0) {
         state.endingType = EndingType::TRAGIC_END;
-        state.endingMessage =
-            "The shelter falls into dead silence.\n"
-            "Diaries are scattered on the table.\n"
-            "The last page reads: \"We did our best.\"";
+        state.endingMessage = "The shelter falls into dead silence..."; 
         return;
     }
 
-    if (healthy >= 4 && totalSupplies >= 10 &&
-        state.hasRadio && state.triggeredEvent6) {
+    // Priority 2: True Ending (Hidden Requirements)
+    if (healthy >= 4 && totalSupplies >= 10 && state.hasRadio && state.triggeredEvent6) {
         state.endingType = EndingType::ORDER_RESTORED;
-        state.endingMessage =
-            "Rescue arrives, and order is reestablished.\n"
-            "The long nightmare finally ends.";
+        state.endingMessage = "Rescue arrives, and order is reestablished.";
         return;
     }
 
+    // Priority 3: Mutation/Evolution Path
     if (mutated * 2 > alive) {
         state.endingType = EndingType::SYMBIOTIC_EVOLUTION;
-        state.endingMessage =
-            "The voice on the radio gradually becomes clear...\n"
-            "But it's not speaking any human language.";
+        state.endingMessage = "The voice on the radio... is no longer human.";
         return;
     }
 
+    // Priority 4: Morality Falloff
     if (alive >= 2 && state.campRobberyCount >= 2) {
         state.endingType = EndingType::MARAUDERS;
-        state.endingMessage =
-            "You have become the very people you once feared.\n"
-            "Survival came at a terrible cost.";
+        state.endingMessage = "Survival came at a terrible cost: your humanity.";
         return;
     }
 
+    // Priority 5: Solo Survival
     if (alive == 1 && totalSupplies >= 10) {
         state.endingType = EndingType::LONE_SURVIVOR;
-        state.endingMessage =
-            "Only you remain, guarding the ruins and your memories.\n"
-            "The wind whistles through the empty shelter.";
+        state.endingMessage = "Only you remain, guarding the ruins and your memories.";
         return;
     }
 
+    // Default: Generic Survival
     state.endingType = EndingType::STRUGGLE_FOR_SURVIVAL;
-    state.endingMessage =
-        "The door finally opens, but the world before you is unrecognizable.\n"
-        "Survival is just another beginning.";
+    state.endingMessage = "Survival is just another beginning.";
 }
 
-// Macro to break out of the daily loop early when the player typed 'q'.
-// We declare it inside main() with a local label, but C++ does not allow
-// labeled break out of multiple constructs, so we use a flag we already
-// have: UI::isQuitRequested(). Each UI call is followed by a check.
+// Control-flow macro: Ensures high responsiveness to the 'Quit' (Q) signal.[cite: 1]
 #define CHECK_QUIT() if (UI::isQuitRequested()) { quitMidGame = true; break; }
 
-int main() {
-    // Make sure Backspace actually erases on screen instead of echoing
-    // as '^H'. No-op on Windows and on non-interactive stdin (pipes).
-    enableTerminalLineEditing();
+// =========================================================================
+// SECTION: Main Entry Point (Game Orchestrator)
+// =========================================================================
 
-    // Seed the random number generator once at program start.
-    initRandom();
+int main() {
+    // 1. Environmental Initialization
+    enableTerminalLineEditing();
+    initRandom(); // Seed CSRNG (Pseudo-random)[cite: 1]
 
     UI ui;
     ui.showStartMenu();
@@ -128,123 +130,98 @@ int main() {
     GameState state;
     bool resumed = false;
 
-    // If a save file exists, ask the player whether to resume.
+    // 2. Persistence Check: Load existing game state if available
     if (hasSaveFile()) {
         if (ui.askContinueGame()) {
-            if (UI::isQuitRequested()) {
-                // Player typed 'q' at the resume prompt - keep the save and exit.
-                ui.showQuitConfirmation(0);
-                return 0;
-            }
+            if (UI::isQuitRequested()) { ui.showQuitConfirmation(0); return 0; }
             if (loadGame(state)) {
                 resumed = true;
-                ui.showMessage("Save loaded. Resuming your game...");
+                ui.showMessage("System: State restoration successful.");
                 ui.waitForEnter();
             } else {
-                ui.showMessage("Save file was corrupted. Starting a new game.");
+                ui.showMessage("Error: Save corrupted. Initializing fresh state...");
                 ui.waitForEnter();
                 deleteSaveFile();
             }
         } else {
-            // Quit-at-resume-prompt also arrives here (getYesNo returns false on q).
-            if (UI::isQuitRequested()) {
-                ui.showQuitConfirmation(0);
-                return 0;
-            }
-            // Otherwise the player declined; wipe the old save before fresh start.
-            deleteSaveFile();
+            if (UI::isQuitRequested()) { ui.showQuitConfirmation(0); return 0; }
+            deleteSaveFile(); // Clean slate for new game
         }
     }
 
-    // If we did not resume, run the normal new-game setup.
+    // 3. New Game Configuration (Difficulty Scaling)
     if (!resumed) {
         Difficulty diff = ui.askDifficulty();
-        if (UI::isQuitRequested()) {
-            // Quit during difficulty pick - nothing to save yet.
-            ui.showQuitConfirmation(0);
-            return 0;
-        }
+        if (UI::isQuitRequested()) { ui.showQuitConfirmation(0); return 0; }
         int plan = ui.askSupplyPlan(diff);
-        if (UI::isQuitRequested()) {
-            ui.showQuitConfirmation(0);
-            return 0;
-        }
+        if (UI::isQuitRequested()) { ui.showQuitConfirmation(0); return 0; }
         initResources(state, diff, plan);
     }
 
     bool quitMidGame = false;
 
-    // === Main game loop: at most 10 days, ends early if everyone dies ===
+    // 4. Primary Game Loop (Iterative Logic for 10 Cycles)
     while (state.currentDay <= 10 && state.countLivingSurvivors() > 0) {
 
-        // Save the state of "the start of this day" - that way, if the
-        // player quits anywhere during the day, the next launch will
-        // resume cleanly from the daily report of the same day.
-        saveGame(state);
+        // Auto-save at the start of each day for crash/quit recovery
+        saveGame(state);[cite: 1]
 
         ui.showDailyReport(state);
         CHECK_QUIT();
 
         if (state.countLivingSurvivors() == 0) break;
 
-        // 1. Treatment phase
+        // --- Phase A: Medical Treatment ---
         if (ui.askTreat(state)) {
             CHECK_QUIT();
             treat(state);
-            ui.showMessage("All weak survivors have been healed!");
+            ui.showMessage("Status: Medical supplies applied. Vitals stabilizing.");
             ui.waitForEnter();
             CHECK_QUIT();
         }
         CHECK_QUIT();
 
-        // 2. Expedition phase - player picks the destination.
-        std::vector<int> expeditionMembers;
+        // --- Phase B: Expedition & Resource Acquisition ---
         if (ui.askExpedition(state)) {
             CHECK_QUIT();
             int able = state.countHealthySurvivors() + state.countMutatedSurvivors();
-            int maxN = able / 2;
+            int maxN = able / 2; // Logic: Maintain shelter security by limiting expedition size
             int n = ui.askExpeditionCount(maxN);
             CHECK_QUIT();
-            expeditionMembers = ui.askExpeditionMembers(state, n);
+            
+            std::vector<int> expeditionMembers = ui.askExpeditionMembers(state, n);
             CHECK_QUIT();
             state.expeditionMemberIds = expeditionMembers;
 
             ExpeditionEventType expEvent = ui.askExpeditionDestination(state);
             CHECK_QUIT();
 
-            if (expEvent == ExpeditionEventType::HIDDEN_STORAGE) {
-                state.usedNoteEffect = true;
-            }
+            // Tactical choice: Using knowledge from found notes
+            if (expEvent == ExpeditionEventType::HIDDEN_STORAGE) state.usedNoteEffect = true;
 
             std::string expResult = processExpeditionEvent(state, expEvent, expeditionMembers);
-            ui.showEventResult("EXPEDITION RESULT", expResult);
+            ui.showEventResult("EXPEDITION LOG", expResult);
             CHECK_QUIT();
         }
         CHECK_QUIT();
 
-        // 3. Night random event
+        // --- Phase C: Environmental Stochastic Events (Night) ---
         DailyEventType nightEvent = selectRandomDailyEvent(state);
         std::string nightResult = processDailyEvent(state, nightEvent);
-        ui.showEventResult("NIGHT EVENT", nightResult);
+        ui.showEventResult("INCIDENT REPORT", nightResult);
         CHECK_QUIT();
 
-        // 4. Resource consumption + sick day update
+        // --- Phase D: State Updates & Resource Depletion ---
         consumeDaily(state);
         updateSickCounters(state);
 
-        // 5. End-of-day summary
         ui.showDayEnd(state);
-        // Note: even if the player typed 'q' during the End-of-Day prompt,
-        // we still treat the day as complete - they finished all actions.
-        // So we advance the day counter and save the *new* day's state
-        // before honoring the quit. This way "I quit at end of day 3"
-        // means "next time I start at day 4", which feels natural.
-
+        
+        // Finalize Day: Transition state for the next cycle
         state.resetDailyStates();
         state.currentDay++;
 
-        // Save the just-advanced state, replacing the older "start of
-        // previous day" save written at the top of this iteration.
+        // Update persistent save file with the advanced day count
         if (state.currentDay <= 10 && state.countLivingSurvivors() > 0) {
             saveGame(state);
         }
@@ -252,23 +229,17 @@ int main() {
         CHECK_QUIT();
     }
 
-    // ----- Exit path 1: the player saved & quit mid-game -----
+    // 5. Exit Handling
     if (quitMidGame) {
-        // The save written at the start of this day is still on disk.
-        // It points to the *current* day, so the player will replay this
-        // day from its daily report when they return.
         ui.showQuitConfirmation(state.currentDay);
         return 0;
     }
 
-    // ----- Exit path 2: the game ended naturally -----
+    // 6. Ending Sequence & Data Cleanup
     if (state.currentDay > 10) state.currentDay = 10;
-
     determineEnding(state);
     ui.showEnding(state);
 
-    // Game finished - wipe the save so the next run starts fresh.
-    deleteSaveFile();
-
+    deleteSaveFile(); // Clear session data upon natural completion
     return 0;
 }
