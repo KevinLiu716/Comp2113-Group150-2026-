@@ -1,5 +1,5 @@
 // DailyEvent.cpp
-// Author: HU Zhenghua (hzh)
+// Author: WU Bozhou; Comments: HU Zhenghua
 // Implements the night-time random events.
 
 #include "EventSystem.h"
