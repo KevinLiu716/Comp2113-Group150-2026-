@@ -3,8 +3,8 @@ This is a prviate group project for comp2113 group 150
 
 # Team Members
 
-WU Bozhou (UID: 3036588955) - Game design & Event System
-Liu Shuai Kai (UID: 3036391546) - Resource Management
+Wu Bozhou (UID: 3036588955) - Game design & Event System
+Liu Shuai Kai (UID: 3036391546) - Resource Management & Code Commenting
 Jia Chengru (UID: 3036432613) - Game Logic, UI & Save/Load
 Hu Zhenghua (UID: 3036395712) - Test & video recording
 
