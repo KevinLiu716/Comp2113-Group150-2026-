@@ -1,30 +1,19 @@
 #include "ui.h"
+#include "Tools.h"
 #include <iostream>
 #include <limits>
 #include <sstream>
-#include <cstdlib> // ADDED: Required for system() call to modify tty behavior
 
 using namespace std;
-
-// ============================================================
-// Constructor: Terminal Environment Initialization
-//
-// Addresses a common issue in Linux/Unix SSH environments (like
-// the academy server) where the Backspace key maps to ASCII 8 (^H)
-// instead of the default terminal erase character (ASCII 127).
-// This mapping prevents raw ^H characters from cluttering the CLI.
-//
-// The command '2>/dev/null' ensures the program does not crash or
-// print errors when executed in non-Linux environments (e.g., Windows).
-// ============================================================
-UI::UI() {
-    system("stty erase ^H 2>/dev/null"); 
-}
 
 // ============================================================
 // Quit flag
 //
 // When the player types 'q' or 'Q' at any input prompt, this flag is
+// raised and every subsequent input function returns a safe default
+// without blocking. The main loop polls UI::isQuitRequested() after
+// each UI call to break out cleanly and save the game.
+// ============================================================
 static bool g_quitRequested = false;
 
 bool UI::isQuitRequested() { return g_quitRequested; }
@@ -174,7 +163,7 @@ void UI::drawLeft(const std::string& text, int width) {
             // Skip any extra leading spaces on the next line.
             while (nextStart < t.size() && t[nextStart] == ' ') nextStart++;
         } else {
-            // No space in this chunk — must hard-break at the column limit.
+            // No space in this chunk - must hard-break at the column limit.
             chunkEnd    = j;
             nextStart   = j;
             chunkVisLen = col;
@@ -246,19 +235,31 @@ std::string UI::colorize(const std::string& text, const std::string& color) {
 int UI::getValidChoice(int minChoice, int maxChoice) {
     std::string input;
     while (true) {
-        if (!(std::cin >> input)) {
+        if (!readLineWithEditing(input)) {
             // EOF: treat as quit too, so the program does not hang.
             g_quitRequested = true;
             return minChoice;
         }
+        // Trim leading/trailing whitespace.
+        size_t start = input.find_first_not_of(" \t");
+        size_t end   = input.find_last_not_of(" \t");
+        if (start == std::string::npos) {
+            // Empty line: re-prompt.
+            std::cout << RED << "  Please enter a number between "
+                      << minChoice << " and " << maxChoice
+                      << " (or 'q' to save & quit): " << RESET;
+            continue;
+        }
+        std::string trimmed = input.substr(start, end - start + 1);
+
         // Check for the universal quit command first.
-        if (isQuitInput(input)) {
+        if (isQuitInput(trimmed)) {
             g_quitRequested = true;
-            return minChoice;  // Return any safe value; caller will exit.
+            return minChoice;
         }
         // Try to parse as integer.
         try {
-            int choice = std::stoi(input);
+            int choice = std::stoi(trimmed);
             if (choice >= minChoice && choice <= maxChoice) {
                 return choice;
             }
@@ -274,16 +275,25 @@ int UI::getValidChoice(int minChoice, int maxChoice) {
 bool UI::getYesNo() {
     std::string input;
     while (true) {
-        if (!(std::cin >> input)) {
+        if (!readLineWithEditing(input)) {
             g_quitRequested = true;
             return false;
         }
-        if (isQuitInput(input)) {
+        // Trim whitespace.
+        size_t start = input.find_first_not_of(" \t");
+        size_t end   = input.find_last_not_of(" \t");
+        if (start == std::string::npos) {
+            std::cout << RED << "  Please enter Y or N (or 'q' to save & quit): " << RESET;
+            continue;
+        }
+        std::string trimmed = input.substr(start, end - start + 1);
+
+        if (isQuitInput(trimmed)) {
             g_quitRequested = true;
             return false;
         }
-        if (input.size() == 1) {
-            char c = input[0];
+        if (trimmed.size() == 1) {
+            char c = trimmed[0];
             if (c == 'Y' || c == 'y') return true;
             if (c == 'N' || c == 'n') return false;
         }
@@ -552,6 +562,7 @@ std::vector<int> UI::askExpeditionMembers(const GameState& state, int count) {
         std::cout << "\n  " << CYAN << "> " << RESET << "Pick member #" << (i + 1)
                   << " (1-" << available.size() << "): ";
         int pick = getValidChoice(1, (int)available.size());
+        if (g_quitRequested) return chosen;  // player typed 'q'
         int realIndex = available[pick - 1];
         bool duplicate = false;
         for (int c : chosen) if (c == realIndex) duplicate = true;
@@ -846,15 +857,16 @@ void UI::showQuitConfirmation(int currentDay) {
 
 void UI::waitForEnter() {
     std::cout << "\n  " << DIM << "[ Press Enter to continue, or 'q' to save & quit ]" << RESET;
-    int c = std::cin.get();
-    if (c == EOF) {
+    std::string line;
+    if (!readLineWithEditing(line)) {
         g_quitRequested = true;
         return;
     }
-    if (c == 'q' || c == 'Q') {
-        g_quitRequested = true;
-        // Eat the rest of the line so it doesn't bleed into the next prompt.
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    // If the player typed 'q' (possibly with spaces), treat as quit.
+    for (size_t i = 0; i < line.size(); i++) {
+        char c = line[i];
+        if (c == ' ' || c == '\t') continue;
+        if (c == 'q' || c == 'Q') g_quitRequested = true;
+        break;
     }
-    // If c was '\n', we're done already.
 }
