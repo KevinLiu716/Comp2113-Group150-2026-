@@ -12,6 +12,9 @@
 
 class UI {
 public:
+    // -------- Constructor --------
+    UI(); // 新增：构造函数，用于初始化终端输入环境
+
     // -------- Start and end screens --------
     void showStartMenu();
     Difficulty askDifficulty();
