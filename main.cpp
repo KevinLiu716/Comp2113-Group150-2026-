@@ -12,18 +12,28 @@
 #include <termios.h>
 #include <unistd.h>
 
-// Make sure backspace actually erases on screen instead of printing ^H.
-// Some shells / terminals turn off ECHOE; we force it back on here, and
-// restore the original settings when the program exits.
+// Saved original terminal settings so we can restore them on exit.
 static struct termios g_originalTermios;
 static bool g_termiosSaved = false;
 
+// Function: restoreTerminal
+// What it does: Restores the terminal to its original settings when the
+//               program exits. Registered via std::atexit().
+// Input:  none.
+// Output: none.
 static void restoreTerminal() {
     if (g_termiosSaved) {
         tcsetattr(STDIN_FILENO, TCSANOW, &g_originalTermios);
     }
 }
 
+// Function: enableTerminalLineEditing
+// What it does: Forces the terminal into canonical mode with echo so that
+//               backspace works properly (some shells turn off ECHOE).
+//               Saves the old settings and registers restoreTerminal() to
+//               put them back on exit.
+// Input:  none.
+// Output: none.
 static void enableTerminalLineEditing() {
     if (!isatty(STDIN_FILENO)) return;
     if (tcgetattr(STDIN_FILENO, &g_originalTermios) != 0) return;
@@ -35,8 +45,12 @@ static void enableTerminalLineEditing() {
     tcsetattr(STDIN_FILENO, TCSANOW, &t);
 }
 
-// Decide which of the six endings the player got based on the final
-// game state, and fill in the matching message.
+// Function: determineEnding
+// What it does: Looks at the final game state after Day 10 (or after all
+//               survivors died) and picks one of the six endings. Sets
+//               state.endingType and state.endingMessage accordingly.
+// Input:  state - the game state at the end of the game.
+// Output: none (modifies state.endingType and state.endingMessage).
 void determineEnding(GameState& state) {
     int alive = state.countLivingSurvivors();
     int healthy = state.countHealthySurvivors();
@@ -84,10 +98,18 @@ void determineEnding(GameState& state) {
     state.endingMessage = "Survival is just another beginning.";
 }
 
-// Used after every UI call: if the player typed 'q', break out of the
-// main loop so we can save and exit cleanly.
+// Macro: CHECK_QUIT
+// Used after every UI call. If the player typed 'q', sets quitMidGame
+// and breaks out of the main loop so we can save and exit cleanly.
 #define CHECK_QUIT() if (UI::isQuitRequested()) { quitMidGame = true; break; }
 
+// Function: main
+// What it does: Program entry point. Shows the start menu, optionally loads
+//               a save, runs the 10-day game loop (treatment -> expedition ->
+//               night event -> consumption -> sick counters -> day end), then
+//               determines and displays the ending.
+// Input:  none.
+// Output: Returns 0 on normal exit.
 int main() {
     enableTerminalLineEditing();
     initRandom();
@@ -128,7 +150,7 @@ int main() {
 
     bool quitMidGame = false;
 
-    // Main game loop: at most 10 days, ends early if everyone dies.
+    // Main game loop: runs up to 10 days, ends early if everyone dies.
     while (state.currentDay <= 10 && state.countLivingSurvivors() > 0) {
 
         // Save at the start of each day so the player can quit anywhere
@@ -140,7 +162,7 @@ int main() {
 
         if (state.countLivingSurvivors() == 0) break;
 
-        // 1. Treatment
+        // Step 1: Treatment phase
         if (ui.askTreat(state)) {
             CHECK_QUIT();
             treat(state);
@@ -150,7 +172,7 @@ int main() {
         }
         CHECK_QUIT();
 
-        // 2. Expedition
+        // Step 2: Expedition phase
         if (ui.askExpedition(state)) {
             CHECK_QUIT();
             int able = state.countHealthySurvivors() + state.countMutatedSurvivors();
@@ -175,17 +197,17 @@ int main() {
         }
         CHECK_QUIT();
 
-        // 3. Random night event
+        // Step 3: Random night event
         DailyEventType nightEvent = selectRandomDailyEvent(state);
         std::string nightResult = processDailyEvent(state, nightEvent);
         ui.showEventResult("NIGHT EVENT", nightResult);
         CHECK_QUIT();
 
-        // 4. Daily resource consumption + sick counter update
+        // Step 4: Daily resource consumption + sick counter update
         consumeDaily(state);
         updateSickCounters(state);
 
-        // 5. End of day summary
+        // Step 5: End of day summary
         ui.showDayEnd(state);
 
         state.resetDailyStates();
@@ -199,13 +221,13 @@ int main() {
         CHECK_QUIT();
     }
 
-    // Saved & quit mid-game: leave the save file in place so they can resume.
+    // Player quit mid-game: leave the save file so they can resume later.
     if (quitMidGame) {
         ui.showQuitConfirmation(state.currentDay);
         return 0;
     }
 
-    // Game ended normally - show the ending and clear the save.
+    // Game ended normally: determine ending, show it, delete the save.
     if (state.currentDay > 10) state.currentDay = 10;
     determineEnding(state);
     ui.showEnding(state);
