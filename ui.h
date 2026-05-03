@@ -1,6 +1,6 @@
 // ui.h
 // Declares the UI class. The UI is responsible for ALL text output and
-// user input. It does not contain any game logic.
+// user input. It does not contain any game logic.[cite: 5]
 
 #ifndef UI_H
 #define UI_H
@@ -13,7 +13,12 @@
 class UI {
 public:
     // -------- Constructor --------
-    UI(); // 新增：构造函数，用于初始化终端输入环境
+    /**
+     * @brief Constructor for the UI class.
+     * Initializes the terminal environment and configures tty settings 
+     * (e.g., mapping backspace key) for stable user interaction.
+     */
+    UI(); 
 
     // -------- Start and end screens --------
     void showStartMenu();
@@ -22,7 +27,7 @@ public:
     void showEnding(const GameState& state);
 
     // Save-file prompt: shown at startup if a save exists. Returns true if
-    // the player wants to resume, false to start a new game.
+    // the player wants to resume, false to start a new game.[cite: 5]
     bool askContinueGame();
 
     // -------- Daily flow --------
@@ -35,7 +40,7 @@ public:
     std::vector<int> askExpeditionMembers(const GameState& state, int count);
 
     // Player picks where the expedition goes (1..7 menu).
-    // Hidden Storage is only available when an unused note is held.
+    // Hidden Storage is only available when an unused note is held.[cite: 5]
     ExpeditionEventType askExpeditionDestination(const GameState& state);
 
     // -------- In-event player choices --------
@@ -50,11 +55,11 @@ public:
     void waitForEnter();
 
     // Quit flag: returns true if the player typed 'q' at any input prompt.
-    // The main loop checks this after each UI call and exits cleanly.
+    // The main loop checks this after each UI call and exits cleanly.[cite: 5]
     static bool isQuitRequested();
     static void resetQuitFlag();
 
-    // Shown after a save-and-quit, just before the program returns.
+    // Shown after a save-and-quit, just before the program returns.[cite: 5]
     void showQuitConfirmation(int currentDay);
 
 private:
